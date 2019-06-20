@@ -50,11 +50,11 @@ This is what I consider to be the basic async function:
 		return resolver, rejector
 	}
 
-Ok so lets pull that appart:
+Ok so lets pull that apart:
 
 * Lets say it's idiomatic to add the `Async` suffix to any function name,
 much like you might prefix a function name with `Must` to denote it might panic.
-This follows other langauges such as C#.
+This follows other languages such as C#.
 
 * Any inputs to an async function must be channels, this is so that when that
 input is returned from another async function that channel can just be passed
@@ -241,11 +241,11 @@ Now I will introduce the first set of helper functions that this library provide
 Due to the rule above that, "any inputs to an async function must be channels",
 it becomes a pain to start off an asynchronous chain like the above.
 
-Now if you know for certian that a particular function will always be used at
+Now if you know for certain that a particular function will always be used at
 the start and never, ever have to accept input from another async function then
 by all means just make the function accept the value directly and move on.
 
-However for the cases that you can not be so certian how your async function
+However for the cases that you can not be so certain how your async function
 will be used then you can use the `MakeCh` helpers like so:
 
 	import "github.com/brad-jones/goasync/ch"
