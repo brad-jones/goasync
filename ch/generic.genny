@@ -1,0 +1,24 @@
+package ch
+
+import (
+	"github.com/cheekybits/genny/generic"
+)
+
+// ChannelType is a generic type parameter for use with https://github.com/cheekybits/genny
+type ChannelType generic.Type
+
+// MakeChannelType takes the given value and returns a channel with the value
+// already sent to it, ready to be read.
+func MakeChannelType(v ChannelType) <-chan ChannelType {
+	channel := make(chan ChannelType, 1)
+	channel <- v
+	return channel
+}
+
+// MakeChannelTypeSlice takes the given value and returns a channel with the
+// value already sent to it, ready to be read.
+func MakeChannelTypeSlice(v []ChannelType) <-chan []ChannelType {
+	channel := make(chan []ChannelType, 1)
+	channel <- v
+	return channel
+}

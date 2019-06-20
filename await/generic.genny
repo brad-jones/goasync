@@ -1,0 +1,92 @@
+package await
+
+import (
+	"github.com/cheekybits/genny/generic"
+)
+
+// Awaitable is a generic type parameter for use with https://github.com/cheekybits/genny
+type Awaitable generic.Type
+
+// AllAwaitables will wait for every given channel to emit a single result.
+// The results will be returned in a slice ordered the same as the input channels.
+func AllAwaitables(awaitables ...<-chan Awaitable) []Awaitable {
+	awaited := []Awaitable{}
+	for _, awaitable := range awaitables {
+		awaited = append(awaited, <-awaitable)
+	}
+	return awaited
+}
+
+// AllAwaitableSlices will wait for every given channel to emit a single result.
+// The results will be returned in a slice ordered the same as the input channels.
+func AllAwaitableSlices(awaitables ...<-chan []Awaitable) [][]Awaitable {
+	awaited := [][]Awaitable{}
+	for _, awaitable := range awaitables {
+		awaited = append(awaited, <-awaitable)
+	}
+	return awaited
+}
+
+// AllAwaitablesAsync is an asynchronous version of AllAwaitables
+func AllAwaitablesAsync(awaitables ...<-chan Awaitable) <-chan []Awaitable {
+	resolver := make(chan []Awaitable, 1)
+	go func() {
+		resolver <- AllAwaitables(awaitables...)
+	}()
+	return resolver
+}
+
+// AllAwaitableSlicesAsync is an asynchronous version of AllAwaitableSlices
+func AllAwaitableSlicesAsync(awaitables ...<-chan []Awaitable) <-chan [][]Awaitable {
+	resolver := make(chan [][]Awaitable, 1)
+	go func() {
+		resolver <- AllAwaitableSlices(awaitables...)
+	}()
+	return resolver
+}
+
+// AnyAwaitable will wait for the first channel to emit a single result
+// and return that, ignoring all other channels.
+func AnyAwaitable(awaitables ...<-chan Awaitable) Awaitable {
+	for {
+		for _, awaitable := range awaitables {
+			select {
+			default:
+			case awaited := <-awaitable:
+				return awaited
+			}
+		}
+	}
+}
+
+// AnyAwaitableSlice will wait for the first channel to emit a single result
+// and return that, ignoring all other channels.
+func AnyAwaitableSlice(awaitables ...<-chan []Awaitable) []Awaitable {
+	for {
+		for _, awaitable := range awaitables {
+			select {
+			default:
+			case awaited := <-awaitable:
+				return awaited
+			}
+		}
+	}
+}
+
+// AnyAwaitableAsync is an asynchronous version of AnyAwaitable.
+func AnyAwaitableAsync(awaitables ...<-chan Awaitable) <-chan Awaitable {
+	resolver := make(chan Awaitable, 1)
+	go func() {
+		resolver <- AnyAwaitable(awaitables...)
+	}()
+	return resolver
+}
+
+// AnyAwaitableSliceAsync is an asynchronous version of AnyAwaitable.
+func AnyAwaitableSliceAsync(awaitables ...<-chan []Awaitable) <-chan []Awaitable {
+	resolver := make(chan []Awaitable, 1)
+	go func() {
+		resolver <- AnyAwaitableSlice(awaitables...)
+	}()
+	return resolver
+}

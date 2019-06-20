@@ -1,0 +1,12 @@
+{
+    "cSpell.words": [
+        "Bools",
+        "Genny",
+        "Println",
+        "mypkg",
+        "mytype"
+    ],
+    "files.associations": {
+        "*.genny": "go"
+    }
+}
