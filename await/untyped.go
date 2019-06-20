@@ -10,6 +10,8 @@ func All(awaitables ...interface{}) []interface{} {
 	awaited := []interface{}{}
 	for _, awaitable := range awaitables {
 		switch v := awaitable.(type) {
+		case <-chan struct{}:
+			awaited = append(awaited, <-v)
 		case <-chan bool:
 			awaited = append(awaited, <-v)
 		case <-chan byte:
@@ -72,6 +74,12 @@ func Any(awaitables ...interface{}) interface{} {
 	for {
 		for _, awaitable := range awaitables {
 			switch v := awaitable.(type) {
+			case <-chan struct{}:
+				select {
+				default:
+				case awaited := <-v:
+					return awaited
+				}
 			case <-chan bool:
 				select {
 				default:
