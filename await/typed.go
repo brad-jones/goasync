@@ -4,1682 +4,6570 @@
 
 package await
 
-// AllBools will wait for every given channel to emit a single result.
-// The results will be returned in a slice ordered the same as the input channels.
-func AllBools(awaitables ...<-chan bool) []bool {
+import (
+	"sync"
+
+	"github.com/brad-jones/goasync/stop"
+	"github.com/brad-jones/goasync/task"
+	"github.com/go-errors/errors"
+)
+
+// AllBools will wait for every given task to emit a result.
+// The results (& errors) will be returned in a slice ordered the
+// same as the input.
+func AllBools(awaitables ...*task.BoolTask) ([]bool, error) {
 	awaited := []bool{}
+	awaitedErrors := []error{}
+
 	for _, awaitable := range awaitables {
-		awaited = append(awaited, <-awaitable)
+		v, e := awaitable.Result()
+		awaited = append(awaited, v)
+		awaitedErrors = append(awaitedErrors, e)
 	}
-	return awaited
+
+	if len(awaitedErrors) > 0 {
+		return nil, errors.New(&ErrTaskFailed{
+			Errors: awaitedErrors,
+		})
+	}
+
+	return awaited, nil
 }
 
-// AllBoolSlices will wait for every given channel to emit a single result.
-// The results will be returned in a slice ordered the same as the input channels.
-func AllBoolSlices(awaitables ...<-chan []bool) [][]bool {
+// AllBoolSlices will wait for every given task to emit a result.
+// The results (& errors) will be returned in a slice ordered the
+// same as the input.
+func AllBoolSlices(awaitables ...*task.BoolSliceTask) ([][]bool, error) {
 	awaited := [][]bool{}
+	awaitedErrors := []error{}
+
 	for _, awaitable := range awaitables {
-		awaited = append(awaited, <-awaitable)
+		v, e := awaitable.Result()
+		awaited = append(awaited, v)
+		awaitedErrors = append(awaitedErrors, e)
 	}
-	return awaited
+
+	if len(awaitedErrors) > 0 {
+		return nil, errors.New(&ErrTaskFailed{
+			Errors: awaitedErrors,
+		})
+	}
+
+	return awaited, nil
 }
 
-// AllBoolsAsync is an asynchronous version of AllBools
-func AllBoolsAsync(awaitables ...<-chan bool) <-chan []bool {
-	resolver := make(chan []bool, 1)
-	go func() {
-		resolver <- AllBools(awaitables...)
-	}()
-	return resolver
+// AnyBool will wait for the first task to emit a result (or an error)
+// and return that, canceling all other tasks.
+func AnyBool(awaitables ...*task.BoolTask) (value bool, err error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.All(stop.ToStopables(v...)...)
+
+	type doneOnce struct {
+		o  sync.Once
+		ch chan struct{}
+	}
+	done := doneOnce{
+		ch: make(chan struct{}, 1),
+	}
+	closeDone := func() {
+		done.o.Do(func() {
+			close(done.ch)
+		})
+	}
+
+	for _, awaitable := range awaitables {
+		go func() {
+			defer closeDone()
+			value, err = awaitable.Result()
+		}()
+	}
+
+	<-done.ch
+	return value, err
 }
 
-// AllBoolSlicesAsync is an asynchronous version of AllBoolSlices
-func AllBoolSlicesAsync(awaitables ...<-chan []bool) <-chan [][]bool {
-	resolver := make(chan [][]bool, 1)
-	go func() {
-		resolver <- AllBoolSlices(awaitables...)
-	}()
-	return resolver
+// FastAnyBool does the same as AnyBool but does not wait for all
+// other tasks to stop. It does tell them to stop it just doesn't wait for
+// them to stop.
+func FastAnyBool(awaitables ...*task.BoolTask) (value bool, err error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.AllAsync(stop.ToStopables(v...)...)
+
+	type doneOnce struct {
+		o  sync.Once
+		ch chan struct{}
+	}
+	done := doneOnce{
+		ch: make(chan struct{}, 1),
+	}
+	closeDone := func() {
+		done.o.Do(func() {
+			close(done.ch)
+		})
+	}
+
+	for _, awaitable := range awaitables {
+		go func() {
+			defer closeDone()
+			value, err = awaitable.Result()
+		}()
+	}
+
+	<-done.ch
+	return value, err
 }
 
-// AnyBool will wait for the first channel to emit a single result
-// and return that, ignoring all other channels.
-func AnyBool(awaitables ...<-chan bool) bool {
+// AnyBoolSlice will wait for the first task to emit a result (or an error)
+// and return that, canceling all other tasks.
+func AnyBoolSlice(awaitables ...*task.BoolSliceTask) (value []bool, err error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.All(stop.ToStopables(v...)...)
+
+	type doneOnce struct {
+		o  sync.Once
+		ch chan struct{}
+	}
+	done := doneOnce{
+		ch: make(chan struct{}, 1),
+	}
+	closeDone := func() {
+		done.o.Do(func() {
+			close(done.ch)
+		})
+	}
+
+	for _, awaitable := range awaitables {
+		go func() {
+			defer closeDone()
+			value, err = awaitable.Result()
+		}()
+	}
+
+	<-done.ch
+	return value, err
+}
+
+// FastAnyBoolSlice does the same as AnyBoolSlice but does not wait
+// for all other tasks to stop. It does tell them to stop it just doesn't wait
+// for them to stop.
+func FastAnyBoolSlice(awaitables ...*task.BoolSliceTask) (value []bool, err error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.AllAsync(stop.ToStopables(v...)...)
+
+	type doneOnce struct {
+		o  sync.Once
+		ch chan struct{}
+	}
+	done := doneOnce{
+		ch: make(chan struct{}, 1),
+	}
+	closeDone := func() {
+		done.o.Do(func() {
+			close(done.ch)
+		})
+	}
+
+	for _, awaitable := range awaitables {
+		go func() {
+			defer closeDone()
+			value, err = awaitable.Result()
+		}()
+	}
+
+	<-done.ch
+	return value, err
+}
+
+// AllBoolsOrError will wait for every given task to emit a result or
+// return as soon as an error is encountered, canceling all other tasks.
+func AllBoolsOrError(awaitables ...*task.BoolTask) ([]bool, error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.All(stop.ToStopables(v...)...)
+
+	errCh := make(chan error, 1)
+	valueCh := make(chan bool, 1)
+
+	for _, awaitable := range awaitables {
+		go func() {
+			v, err := awaitable.Result()
+			if err != nil {
+				errCh <- errors.Wrap(err, 0)
+				return
+			}
+			valueCh <- v
+		}()
+	}
+
+	values := []bool{}
 	for {
-		for _, awaitable := range awaitables {
-			select {
-			default:
-			case awaited := <-awaitable:
-				return awaited
+		select {
+		case err := <-errCh:
+			return nil, errors.Wrap(err, 0)
+		case value := <-valueCh:
+			values = append(values, value)
+			if len(values) == len(awaitables) {
+				return values, nil
 			}
 		}
 	}
 }
 
-// AnyBoolSlice will wait for the first channel to emit a single result
-// and return that, ignoring all other channels.
-func AnyBoolSlice(awaitables ...<-chan []bool) []bool {
+// FastAllBoolsOrError does the same as AllBoolsOrError but does not
+// wait for all other tasks to stop. It does tell them to stop it just doesn't
+// wait for them to stop.
+func FastAllBoolsOrError(awaitables ...*task.BoolTask) ([]bool, error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.AllAsync(stop.ToStopables(v...)...)
+
+	errCh := make(chan error, 1)
+	valueCh := make(chan bool, 1)
+
+	for _, awaitable := range awaitables {
+		go func() {
+			v, err := awaitable.Result()
+			if err != nil {
+				errCh <- errors.Wrap(err, 0)
+				return
+			}
+			valueCh <- v
+		}()
+	}
+
+	values := []bool{}
 	for {
-		for _, awaitable := range awaitables {
-			select {
-			default:
-			case awaited := <-awaitable:
-				return awaited
+		select {
+		case err := <-errCh:
+			return nil, errors.Wrap(err, 0)
+		case value := <-valueCh:
+			values = append(values, value)
+			if len(values) == len(awaitables) {
+				return values, nil
 			}
 		}
 	}
 }
 
-// AnyBoolAsync is an asynchronous version of AnyBool.
-func AnyBoolAsync(awaitables ...<-chan bool) <-chan bool {
-	resolver := make(chan bool, 1)
-	go func() {
-		resolver <- AnyBool(awaitables...)
-	}()
-	return resolver
+// AllBoolSlicesOrError will wait for every given task to emit a result or
+// return as soon as an error is encountered, canceling all other tasks.
+func AllBoolSlicesOrError(awaitables ...*task.BoolSliceTask) ([][]bool, error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.All(stop.ToStopables(v...)...)
+
+	errCh := make(chan error, 1)
+	valueCh := make(chan []bool, 1)
+
+	for _, awaitable := range awaitables {
+		go func() {
+			v, err := awaitable.Result()
+			if err != nil {
+				errCh <- errors.Wrap(err, 0)
+				return
+			}
+			valueCh <- v
+		}()
+	}
+
+	values := [][]bool{}
+	for {
+		select {
+		case err := <-errCh:
+			return nil, errors.Wrap(err, 0)
+		case value := <-valueCh:
+			values = append(values, value)
+			if len(values) == len(awaitables) {
+				return values, nil
+			}
+		}
+	}
 }
 
-// AnyBoolSliceAsync is an asynchronous version of AnyBool.
-func AnyBoolSliceAsync(awaitables ...<-chan []bool) <-chan []bool {
-	resolver := make(chan []bool, 1)
-	go func() {
-		resolver <- AnyBoolSlice(awaitables...)
-	}()
-	return resolver
+// FastAllBoolSlicesOrError does the same as AllBoolSlicesOrError but
+// does not wait for all other tasks to stop. It does tell them to stop it just
+// doesn't wait for them to stop.
+func FastAllBoolSlicesOrError(awaitables ...*task.BoolSliceTask) ([][]bool, error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.AllAsync(stop.ToStopables(v...)...)
+
+	errCh := make(chan error, 1)
+	valueCh := make(chan []bool, 1)
+
+	for _, awaitable := range awaitables {
+		go func() {
+			v, err := awaitable.Result()
+			if err != nil {
+				errCh <- errors.Wrap(err, 0)
+				return
+			}
+			valueCh <- v
+		}()
+	}
+
+	values := [][]bool{}
+	for {
+		select {
+		case err := <-errCh:
+			return nil, errors.Wrap(err, 0)
+		case value := <-valueCh:
+			values = append(values, value)
+			if len(values) == len(awaitables) {
+				return values, nil
+			}
+		}
+	}
 }
 
-// AllBytes will wait for every given channel to emit a single result.
-// The results will be returned in a slice ordered the same as the input channels.
-func AllBytes(awaitables ...<-chan byte) []byte {
+// AllBytes will wait for every given task to emit a result.
+// The results (& errors) will be returned in a slice ordered the
+// same as the input.
+func AllBytes(awaitables ...*task.ByteTask) ([]byte, error) {
 	awaited := []byte{}
+	awaitedErrors := []error{}
+
 	for _, awaitable := range awaitables {
-		awaited = append(awaited, <-awaitable)
+		v, e := awaitable.Result()
+		awaited = append(awaited, v)
+		awaitedErrors = append(awaitedErrors, e)
 	}
-	return awaited
+
+	if len(awaitedErrors) > 0 {
+		return nil, errors.New(&ErrTaskFailed{
+			Errors: awaitedErrors,
+		})
+	}
+
+	return awaited, nil
 }
 
-// AllByteSlices will wait for every given channel to emit a single result.
-// The results will be returned in a slice ordered the same as the input channels.
-func AllByteSlices(awaitables ...<-chan []byte) [][]byte {
+// AllByteSlices will wait for every given task to emit a result.
+// The results (& errors) will be returned in a slice ordered the
+// same as the input.
+func AllByteSlices(awaitables ...*task.ByteSliceTask) ([][]byte, error) {
 	awaited := [][]byte{}
+	awaitedErrors := []error{}
+
 	for _, awaitable := range awaitables {
-		awaited = append(awaited, <-awaitable)
+		v, e := awaitable.Result()
+		awaited = append(awaited, v)
+		awaitedErrors = append(awaitedErrors, e)
 	}
-	return awaited
+
+	if len(awaitedErrors) > 0 {
+		return nil, errors.New(&ErrTaskFailed{
+			Errors: awaitedErrors,
+		})
+	}
+
+	return awaited, nil
 }
 
-// AllBytesAsync is an asynchronous version of AllBytes
-func AllBytesAsync(awaitables ...<-chan byte) <-chan []byte {
-	resolver := make(chan []byte, 1)
-	go func() {
-		resolver <- AllBytes(awaitables...)
-	}()
-	return resolver
+// AnyByte will wait for the first task to emit a result (or an error)
+// and return that, canceling all other tasks.
+func AnyByte(awaitables ...*task.ByteTask) (value byte, err error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.All(stop.ToStopables(v...)...)
+
+	type doneOnce struct {
+		o  sync.Once
+		ch chan struct{}
+	}
+	done := doneOnce{
+		ch: make(chan struct{}, 1),
+	}
+	closeDone := func() {
+		done.o.Do(func() {
+			close(done.ch)
+		})
+	}
+
+	for _, awaitable := range awaitables {
+		go func() {
+			defer closeDone()
+			value, err = awaitable.Result()
+		}()
+	}
+
+	<-done.ch
+	return value, err
 }
 
-// AllByteSlicesAsync is an asynchronous version of AllByteSlices
-func AllByteSlicesAsync(awaitables ...<-chan []byte) <-chan [][]byte {
-	resolver := make(chan [][]byte, 1)
-	go func() {
-		resolver <- AllByteSlices(awaitables...)
-	}()
-	return resolver
+// FastAnyByte does the same as AnyByte but does not wait for all
+// other tasks to stop. It does tell them to stop it just doesn't wait for
+// them to stop.
+func FastAnyByte(awaitables ...*task.ByteTask) (value byte, err error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.AllAsync(stop.ToStopables(v...)...)
+
+	type doneOnce struct {
+		o  sync.Once
+		ch chan struct{}
+	}
+	done := doneOnce{
+		ch: make(chan struct{}, 1),
+	}
+	closeDone := func() {
+		done.o.Do(func() {
+			close(done.ch)
+		})
+	}
+
+	for _, awaitable := range awaitables {
+		go func() {
+			defer closeDone()
+			value, err = awaitable.Result()
+		}()
+	}
+
+	<-done.ch
+	return value, err
 }
 
-// AnyByte will wait for the first channel to emit a single result
-// and return that, ignoring all other channels.
-func AnyByte(awaitables ...<-chan byte) byte {
+// AnyByteSlice will wait for the first task to emit a result (or an error)
+// and return that, canceling all other tasks.
+func AnyByteSlice(awaitables ...*task.ByteSliceTask) (value []byte, err error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.All(stop.ToStopables(v...)...)
+
+	type doneOnce struct {
+		o  sync.Once
+		ch chan struct{}
+	}
+	done := doneOnce{
+		ch: make(chan struct{}, 1),
+	}
+	closeDone := func() {
+		done.o.Do(func() {
+			close(done.ch)
+		})
+	}
+
+	for _, awaitable := range awaitables {
+		go func() {
+			defer closeDone()
+			value, err = awaitable.Result()
+		}()
+	}
+
+	<-done.ch
+	return value, err
+}
+
+// FastAnyByteSlice does the same as AnyByteSlice but does not wait
+// for all other tasks to stop. It does tell them to stop it just doesn't wait
+// for them to stop.
+func FastAnyByteSlice(awaitables ...*task.ByteSliceTask) (value []byte, err error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.AllAsync(stop.ToStopables(v...)...)
+
+	type doneOnce struct {
+		o  sync.Once
+		ch chan struct{}
+	}
+	done := doneOnce{
+		ch: make(chan struct{}, 1),
+	}
+	closeDone := func() {
+		done.o.Do(func() {
+			close(done.ch)
+		})
+	}
+
+	for _, awaitable := range awaitables {
+		go func() {
+			defer closeDone()
+			value, err = awaitable.Result()
+		}()
+	}
+
+	<-done.ch
+	return value, err
+}
+
+// AllBytesOrError will wait for every given task to emit a result or
+// return as soon as an error is encountered, canceling all other tasks.
+func AllBytesOrError(awaitables ...*task.ByteTask) ([]byte, error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.All(stop.ToStopables(v...)...)
+
+	errCh := make(chan error, 1)
+	valueCh := make(chan byte, 1)
+
+	for _, awaitable := range awaitables {
+		go func() {
+			v, err := awaitable.Result()
+			if err != nil {
+				errCh <- errors.Wrap(err, 0)
+				return
+			}
+			valueCh <- v
+		}()
+	}
+
+	values := []byte{}
 	for {
-		for _, awaitable := range awaitables {
-			select {
-			default:
-			case awaited := <-awaitable:
-				return awaited
+		select {
+		case err := <-errCh:
+			return nil, errors.Wrap(err, 0)
+		case value := <-valueCh:
+			values = append(values, value)
+			if len(values) == len(awaitables) {
+				return values, nil
 			}
 		}
 	}
 }
 
-// AnyByteSlice will wait for the first channel to emit a single result
-// and return that, ignoring all other channels.
-func AnyByteSlice(awaitables ...<-chan []byte) []byte {
+// FastAllBytesOrError does the same as AllBytesOrError but does not
+// wait for all other tasks to stop. It does tell them to stop it just doesn't
+// wait for them to stop.
+func FastAllBytesOrError(awaitables ...*task.ByteTask) ([]byte, error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.AllAsync(stop.ToStopables(v...)...)
+
+	errCh := make(chan error, 1)
+	valueCh := make(chan byte, 1)
+
+	for _, awaitable := range awaitables {
+		go func() {
+			v, err := awaitable.Result()
+			if err != nil {
+				errCh <- errors.Wrap(err, 0)
+				return
+			}
+			valueCh <- v
+		}()
+	}
+
+	values := []byte{}
 	for {
-		for _, awaitable := range awaitables {
-			select {
-			default:
-			case awaited := <-awaitable:
-				return awaited
+		select {
+		case err := <-errCh:
+			return nil, errors.Wrap(err, 0)
+		case value := <-valueCh:
+			values = append(values, value)
+			if len(values) == len(awaitables) {
+				return values, nil
 			}
 		}
 	}
 }
 
-// AnyByteAsync is an asynchronous version of AnyByte.
-func AnyByteAsync(awaitables ...<-chan byte) <-chan byte {
-	resolver := make(chan byte, 1)
-	go func() {
-		resolver <- AnyByte(awaitables...)
-	}()
-	return resolver
+// AllByteSlicesOrError will wait for every given task to emit a result or
+// return as soon as an error is encountered, canceling all other tasks.
+func AllByteSlicesOrError(awaitables ...*task.ByteSliceTask) ([][]byte, error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.All(stop.ToStopables(v...)...)
+
+	errCh := make(chan error, 1)
+	valueCh := make(chan []byte, 1)
+
+	for _, awaitable := range awaitables {
+		go func() {
+			v, err := awaitable.Result()
+			if err != nil {
+				errCh <- errors.Wrap(err, 0)
+				return
+			}
+			valueCh <- v
+		}()
+	}
+
+	values := [][]byte{}
+	for {
+		select {
+		case err := <-errCh:
+			return nil, errors.Wrap(err, 0)
+		case value := <-valueCh:
+			values = append(values, value)
+			if len(values) == len(awaitables) {
+				return values, nil
+			}
+		}
+	}
 }
 
-// AnyByteSliceAsync is an asynchronous version of AnyByte.
-func AnyByteSliceAsync(awaitables ...<-chan []byte) <-chan []byte {
-	resolver := make(chan []byte, 1)
-	go func() {
-		resolver <- AnyByteSlice(awaitables...)
-	}()
-	return resolver
+// FastAllByteSlicesOrError does the same as AllByteSlicesOrError but
+// does not wait for all other tasks to stop. It does tell them to stop it just
+// doesn't wait for them to stop.
+func FastAllByteSlicesOrError(awaitables ...*task.ByteSliceTask) ([][]byte, error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.AllAsync(stop.ToStopables(v...)...)
+
+	errCh := make(chan error, 1)
+	valueCh := make(chan []byte, 1)
+
+	for _, awaitable := range awaitables {
+		go func() {
+			v, err := awaitable.Result()
+			if err != nil {
+				errCh <- errors.Wrap(err, 0)
+				return
+			}
+			valueCh <- v
+		}()
+	}
+
+	values := [][]byte{}
+	for {
+		select {
+		case err := <-errCh:
+			return nil, errors.Wrap(err, 0)
+		case value := <-valueCh:
+			values = append(values, value)
+			if len(values) == len(awaitables) {
+				return values, nil
+			}
+		}
+	}
 }
 
-// AllComplex128s will wait for every given channel to emit a single result.
-// The results will be returned in a slice ordered the same as the input channels.
-func AllComplex128s(awaitables ...<-chan complex128) []complex128 {
+// AllComplex128s will wait for every given task to emit a result.
+// The results (& errors) will be returned in a slice ordered the
+// same as the input.
+func AllComplex128s(awaitables ...*task.Complex128Task) ([]complex128, error) {
 	awaited := []complex128{}
+	awaitedErrors := []error{}
+
 	for _, awaitable := range awaitables {
-		awaited = append(awaited, <-awaitable)
+		v, e := awaitable.Result()
+		awaited = append(awaited, v)
+		awaitedErrors = append(awaitedErrors, e)
 	}
-	return awaited
+
+	if len(awaitedErrors) > 0 {
+		return nil, errors.New(&ErrTaskFailed{
+			Errors: awaitedErrors,
+		})
+	}
+
+	return awaited, nil
 }
 
-// AllComplex128Slices will wait for every given channel to emit a single result.
-// The results will be returned in a slice ordered the same as the input channels.
-func AllComplex128Slices(awaitables ...<-chan []complex128) [][]complex128 {
+// AllComplex128Slices will wait for every given task to emit a result.
+// The results (& errors) will be returned in a slice ordered the
+// same as the input.
+func AllComplex128Slices(awaitables ...*task.Complex128SliceTask) ([][]complex128, error) {
 	awaited := [][]complex128{}
+	awaitedErrors := []error{}
+
 	for _, awaitable := range awaitables {
-		awaited = append(awaited, <-awaitable)
+		v, e := awaitable.Result()
+		awaited = append(awaited, v)
+		awaitedErrors = append(awaitedErrors, e)
 	}
-	return awaited
+
+	if len(awaitedErrors) > 0 {
+		return nil, errors.New(&ErrTaskFailed{
+			Errors: awaitedErrors,
+		})
+	}
+
+	return awaited, nil
 }
 
-// AllComplex128sAsync is an asynchronous version of AllComplex128s
-func AllComplex128sAsync(awaitables ...<-chan complex128) <-chan []complex128 {
-	resolver := make(chan []complex128, 1)
-	go func() {
-		resolver <- AllComplex128s(awaitables...)
-	}()
-	return resolver
+// AnyComplex128 will wait for the first task to emit a result (or an error)
+// and return that, canceling all other tasks.
+func AnyComplex128(awaitables ...*task.Complex128Task) (value complex128, err error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.All(stop.ToStopables(v...)...)
+
+	type doneOnce struct {
+		o  sync.Once
+		ch chan struct{}
+	}
+	done := doneOnce{
+		ch: make(chan struct{}, 1),
+	}
+	closeDone := func() {
+		done.o.Do(func() {
+			close(done.ch)
+		})
+	}
+
+	for _, awaitable := range awaitables {
+		go func() {
+			defer closeDone()
+			value, err = awaitable.Result()
+		}()
+	}
+
+	<-done.ch
+	return value, err
 }
 
-// AllComplex128SlicesAsync is an asynchronous version of AllComplex128Slices
-func AllComplex128SlicesAsync(awaitables ...<-chan []complex128) <-chan [][]complex128 {
-	resolver := make(chan [][]complex128, 1)
-	go func() {
-		resolver <- AllComplex128Slices(awaitables...)
-	}()
-	return resolver
+// FastAnyComplex128 does the same as AnyComplex128 but does not wait for all
+// other tasks to stop. It does tell them to stop it just doesn't wait for
+// them to stop.
+func FastAnyComplex128(awaitables ...*task.Complex128Task) (value complex128, err error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.AllAsync(stop.ToStopables(v...)...)
+
+	type doneOnce struct {
+		o  sync.Once
+		ch chan struct{}
+	}
+	done := doneOnce{
+		ch: make(chan struct{}, 1),
+	}
+	closeDone := func() {
+		done.o.Do(func() {
+			close(done.ch)
+		})
+	}
+
+	for _, awaitable := range awaitables {
+		go func() {
+			defer closeDone()
+			value, err = awaitable.Result()
+		}()
+	}
+
+	<-done.ch
+	return value, err
 }
 
-// AnyComplex128 will wait for the first channel to emit a single result
-// and return that, ignoring all other channels.
-func AnyComplex128(awaitables ...<-chan complex128) complex128 {
+// AnyComplex128Slice will wait for the first task to emit a result (or an error)
+// and return that, canceling all other tasks.
+func AnyComplex128Slice(awaitables ...*task.Complex128SliceTask) (value []complex128, err error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.All(stop.ToStopables(v...)...)
+
+	type doneOnce struct {
+		o  sync.Once
+		ch chan struct{}
+	}
+	done := doneOnce{
+		ch: make(chan struct{}, 1),
+	}
+	closeDone := func() {
+		done.o.Do(func() {
+			close(done.ch)
+		})
+	}
+
+	for _, awaitable := range awaitables {
+		go func() {
+			defer closeDone()
+			value, err = awaitable.Result()
+		}()
+	}
+
+	<-done.ch
+	return value, err
+}
+
+// FastAnyComplex128Slice does the same as AnyComplex128Slice but does not wait
+// for all other tasks to stop. It does tell them to stop it just doesn't wait
+// for them to stop.
+func FastAnyComplex128Slice(awaitables ...*task.Complex128SliceTask) (value []complex128, err error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.AllAsync(stop.ToStopables(v...)...)
+
+	type doneOnce struct {
+		o  sync.Once
+		ch chan struct{}
+	}
+	done := doneOnce{
+		ch: make(chan struct{}, 1),
+	}
+	closeDone := func() {
+		done.o.Do(func() {
+			close(done.ch)
+		})
+	}
+
+	for _, awaitable := range awaitables {
+		go func() {
+			defer closeDone()
+			value, err = awaitable.Result()
+		}()
+	}
+
+	<-done.ch
+	return value, err
+}
+
+// AllComplex128sOrError will wait for every given task to emit a result or
+// return as soon as an error is encountered, canceling all other tasks.
+func AllComplex128sOrError(awaitables ...*task.Complex128Task) ([]complex128, error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.All(stop.ToStopables(v...)...)
+
+	errCh := make(chan error, 1)
+	valueCh := make(chan complex128, 1)
+
+	for _, awaitable := range awaitables {
+		go func() {
+			v, err := awaitable.Result()
+			if err != nil {
+				errCh <- errors.Wrap(err, 0)
+				return
+			}
+			valueCh <- v
+		}()
+	}
+
+	values := []complex128{}
 	for {
-		for _, awaitable := range awaitables {
-			select {
-			default:
-			case awaited := <-awaitable:
-				return awaited
+		select {
+		case err := <-errCh:
+			return nil, errors.Wrap(err, 0)
+		case value := <-valueCh:
+			values = append(values, value)
+			if len(values) == len(awaitables) {
+				return values, nil
 			}
 		}
 	}
 }
 
-// AnyComplex128Slice will wait for the first channel to emit a single result
-// and return that, ignoring all other channels.
-func AnyComplex128Slice(awaitables ...<-chan []complex128) []complex128 {
+// FastAllComplex128sOrError does the same as AllComplex128sOrError but does not
+// wait for all other tasks to stop. It does tell them to stop it just doesn't
+// wait for them to stop.
+func FastAllComplex128sOrError(awaitables ...*task.Complex128Task) ([]complex128, error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.AllAsync(stop.ToStopables(v...)...)
+
+	errCh := make(chan error, 1)
+	valueCh := make(chan complex128, 1)
+
+	for _, awaitable := range awaitables {
+		go func() {
+			v, err := awaitable.Result()
+			if err != nil {
+				errCh <- errors.Wrap(err, 0)
+				return
+			}
+			valueCh <- v
+		}()
+	}
+
+	values := []complex128{}
 	for {
-		for _, awaitable := range awaitables {
-			select {
-			default:
-			case awaited := <-awaitable:
-				return awaited
+		select {
+		case err := <-errCh:
+			return nil, errors.Wrap(err, 0)
+		case value := <-valueCh:
+			values = append(values, value)
+			if len(values) == len(awaitables) {
+				return values, nil
 			}
 		}
 	}
 }
 
-// AnyComplex128Async is an asynchronous version of AnyComplex128.
-func AnyComplex128Async(awaitables ...<-chan complex128) <-chan complex128 {
-	resolver := make(chan complex128, 1)
-	go func() {
-		resolver <- AnyComplex128(awaitables...)
-	}()
-	return resolver
+// AllComplex128SlicesOrError will wait for every given task to emit a result or
+// return as soon as an error is encountered, canceling all other tasks.
+func AllComplex128SlicesOrError(awaitables ...*task.Complex128SliceTask) ([][]complex128, error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.All(stop.ToStopables(v...)...)
+
+	errCh := make(chan error, 1)
+	valueCh := make(chan []complex128, 1)
+
+	for _, awaitable := range awaitables {
+		go func() {
+			v, err := awaitable.Result()
+			if err != nil {
+				errCh <- errors.Wrap(err, 0)
+				return
+			}
+			valueCh <- v
+		}()
+	}
+
+	values := [][]complex128{}
+	for {
+		select {
+		case err := <-errCh:
+			return nil, errors.Wrap(err, 0)
+		case value := <-valueCh:
+			values = append(values, value)
+			if len(values) == len(awaitables) {
+				return values, nil
+			}
+		}
+	}
 }
 
-// AnyComplex128SliceAsync is an asynchronous version of AnyComplex128.
-func AnyComplex128SliceAsync(awaitables ...<-chan []complex128) <-chan []complex128 {
-	resolver := make(chan []complex128, 1)
-	go func() {
-		resolver <- AnyComplex128Slice(awaitables...)
-	}()
-	return resolver
+// FastAllComplex128SlicesOrError does the same as AllComplex128SlicesOrError but
+// does not wait for all other tasks to stop. It does tell them to stop it just
+// doesn't wait for them to stop.
+func FastAllComplex128SlicesOrError(awaitables ...*task.Complex128SliceTask) ([][]complex128, error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.AllAsync(stop.ToStopables(v...)...)
+
+	errCh := make(chan error, 1)
+	valueCh := make(chan []complex128, 1)
+
+	for _, awaitable := range awaitables {
+		go func() {
+			v, err := awaitable.Result()
+			if err != nil {
+				errCh <- errors.Wrap(err, 0)
+				return
+			}
+			valueCh <- v
+		}()
+	}
+
+	values := [][]complex128{}
+	for {
+		select {
+		case err := <-errCh:
+			return nil, errors.Wrap(err, 0)
+		case value := <-valueCh:
+			values = append(values, value)
+			if len(values) == len(awaitables) {
+				return values, nil
+			}
+		}
+	}
 }
 
-// AllComplex64s will wait for every given channel to emit a single result.
-// The results will be returned in a slice ordered the same as the input channels.
-func AllComplex64s(awaitables ...<-chan complex64) []complex64 {
+// AllComplex64s will wait for every given task to emit a result.
+// The results (& errors) will be returned in a slice ordered the
+// same as the input.
+func AllComplex64s(awaitables ...*task.Complex64Task) ([]complex64, error) {
 	awaited := []complex64{}
+	awaitedErrors := []error{}
+
 	for _, awaitable := range awaitables {
-		awaited = append(awaited, <-awaitable)
+		v, e := awaitable.Result()
+		awaited = append(awaited, v)
+		awaitedErrors = append(awaitedErrors, e)
 	}
-	return awaited
+
+	if len(awaitedErrors) > 0 {
+		return nil, errors.New(&ErrTaskFailed{
+			Errors: awaitedErrors,
+		})
+	}
+
+	return awaited, nil
 }
 
-// AllComplex64Slices will wait for every given channel to emit a single result.
-// The results will be returned in a slice ordered the same as the input channels.
-func AllComplex64Slices(awaitables ...<-chan []complex64) [][]complex64 {
+// AllComplex64Slices will wait for every given task to emit a result.
+// The results (& errors) will be returned in a slice ordered the
+// same as the input.
+func AllComplex64Slices(awaitables ...*task.Complex64SliceTask) ([][]complex64, error) {
 	awaited := [][]complex64{}
+	awaitedErrors := []error{}
+
 	for _, awaitable := range awaitables {
-		awaited = append(awaited, <-awaitable)
+		v, e := awaitable.Result()
+		awaited = append(awaited, v)
+		awaitedErrors = append(awaitedErrors, e)
 	}
-	return awaited
+
+	if len(awaitedErrors) > 0 {
+		return nil, errors.New(&ErrTaskFailed{
+			Errors: awaitedErrors,
+		})
+	}
+
+	return awaited, nil
 }
 
-// AllComplex64sAsync is an asynchronous version of AllComplex64s
-func AllComplex64sAsync(awaitables ...<-chan complex64) <-chan []complex64 {
-	resolver := make(chan []complex64, 1)
-	go func() {
-		resolver <- AllComplex64s(awaitables...)
-	}()
-	return resolver
+// AnyComplex64 will wait for the first task to emit a result (or an error)
+// and return that, canceling all other tasks.
+func AnyComplex64(awaitables ...*task.Complex64Task) (value complex64, err error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.All(stop.ToStopables(v...)...)
+
+	type doneOnce struct {
+		o  sync.Once
+		ch chan struct{}
+	}
+	done := doneOnce{
+		ch: make(chan struct{}, 1),
+	}
+	closeDone := func() {
+		done.o.Do(func() {
+			close(done.ch)
+		})
+	}
+
+	for _, awaitable := range awaitables {
+		go func() {
+			defer closeDone()
+			value, err = awaitable.Result()
+		}()
+	}
+
+	<-done.ch
+	return value, err
 }
 
-// AllComplex64SlicesAsync is an asynchronous version of AllComplex64Slices
-func AllComplex64SlicesAsync(awaitables ...<-chan []complex64) <-chan [][]complex64 {
-	resolver := make(chan [][]complex64, 1)
-	go func() {
-		resolver <- AllComplex64Slices(awaitables...)
-	}()
-	return resolver
+// FastAnyComplex64 does the same as AnyComplex64 but does not wait for all
+// other tasks to stop. It does tell them to stop it just doesn't wait for
+// them to stop.
+func FastAnyComplex64(awaitables ...*task.Complex64Task) (value complex64, err error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.AllAsync(stop.ToStopables(v...)...)
+
+	type doneOnce struct {
+		o  sync.Once
+		ch chan struct{}
+	}
+	done := doneOnce{
+		ch: make(chan struct{}, 1),
+	}
+	closeDone := func() {
+		done.o.Do(func() {
+			close(done.ch)
+		})
+	}
+
+	for _, awaitable := range awaitables {
+		go func() {
+			defer closeDone()
+			value, err = awaitable.Result()
+		}()
+	}
+
+	<-done.ch
+	return value, err
 }
 
-// AnyComplex64 will wait for the first channel to emit a single result
-// and return that, ignoring all other channels.
-func AnyComplex64(awaitables ...<-chan complex64) complex64 {
+// AnyComplex64Slice will wait for the first task to emit a result (or an error)
+// and return that, canceling all other tasks.
+func AnyComplex64Slice(awaitables ...*task.Complex64SliceTask) (value []complex64, err error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.All(stop.ToStopables(v...)...)
+
+	type doneOnce struct {
+		o  sync.Once
+		ch chan struct{}
+	}
+	done := doneOnce{
+		ch: make(chan struct{}, 1),
+	}
+	closeDone := func() {
+		done.o.Do(func() {
+			close(done.ch)
+		})
+	}
+
+	for _, awaitable := range awaitables {
+		go func() {
+			defer closeDone()
+			value, err = awaitable.Result()
+		}()
+	}
+
+	<-done.ch
+	return value, err
+}
+
+// FastAnyComplex64Slice does the same as AnyComplex64Slice but does not wait
+// for all other tasks to stop. It does tell them to stop it just doesn't wait
+// for them to stop.
+func FastAnyComplex64Slice(awaitables ...*task.Complex64SliceTask) (value []complex64, err error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.AllAsync(stop.ToStopables(v...)...)
+
+	type doneOnce struct {
+		o  sync.Once
+		ch chan struct{}
+	}
+	done := doneOnce{
+		ch: make(chan struct{}, 1),
+	}
+	closeDone := func() {
+		done.o.Do(func() {
+			close(done.ch)
+		})
+	}
+
+	for _, awaitable := range awaitables {
+		go func() {
+			defer closeDone()
+			value, err = awaitable.Result()
+		}()
+	}
+
+	<-done.ch
+	return value, err
+}
+
+// AllComplex64sOrError will wait for every given task to emit a result or
+// return as soon as an error is encountered, canceling all other tasks.
+func AllComplex64sOrError(awaitables ...*task.Complex64Task) ([]complex64, error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.All(stop.ToStopables(v...)...)
+
+	errCh := make(chan error, 1)
+	valueCh := make(chan complex64, 1)
+
+	for _, awaitable := range awaitables {
+		go func() {
+			v, err := awaitable.Result()
+			if err != nil {
+				errCh <- errors.Wrap(err, 0)
+				return
+			}
+			valueCh <- v
+		}()
+	}
+
+	values := []complex64{}
 	for {
-		for _, awaitable := range awaitables {
-			select {
-			default:
-			case awaited := <-awaitable:
-				return awaited
+		select {
+		case err := <-errCh:
+			return nil, errors.Wrap(err, 0)
+		case value := <-valueCh:
+			values = append(values, value)
+			if len(values) == len(awaitables) {
+				return values, nil
 			}
 		}
 	}
 }
 
-// AnyComplex64Slice will wait for the first channel to emit a single result
-// and return that, ignoring all other channels.
-func AnyComplex64Slice(awaitables ...<-chan []complex64) []complex64 {
+// FastAllComplex64sOrError does the same as AllComplex64sOrError but does not
+// wait for all other tasks to stop. It does tell them to stop it just doesn't
+// wait for them to stop.
+func FastAllComplex64sOrError(awaitables ...*task.Complex64Task) ([]complex64, error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.AllAsync(stop.ToStopables(v...)...)
+
+	errCh := make(chan error, 1)
+	valueCh := make(chan complex64, 1)
+
+	for _, awaitable := range awaitables {
+		go func() {
+			v, err := awaitable.Result()
+			if err != nil {
+				errCh <- errors.Wrap(err, 0)
+				return
+			}
+			valueCh <- v
+		}()
+	}
+
+	values := []complex64{}
 	for {
-		for _, awaitable := range awaitables {
-			select {
-			default:
-			case awaited := <-awaitable:
-				return awaited
+		select {
+		case err := <-errCh:
+			return nil, errors.Wrap(err, 0)
+		case value := <-valueCh:
+			values = append(values, value)
+			if len(values) == len(awaitables) {
+				return values, nil
 			}
 		}
 	}
 }
 
-// AnyComplex64Async is an asynchronous version of AnyComplex64.
-func AnyComplex64Async(awaitables ...<-chan complex64) <-chan complex64 {
-	resolver := make(chan complex64, 1)
-	go func() {
-		resolver <- AnyComplex64(awaitables...)
-	}()
-	return resolver
+// AllComplex64SlicesOrError will wait for every given task to emit a result or
+// return as soon as an error is encountered, canceling all other tasks.
+func AllComplex64SlicesOrError(awaitables ...*task.Complex64SliceTask) ([][]complex64, error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.All(stop.ToStopables(v...)...)
+
+	errCh := make(chan error, 1)
+	valueCh := make(chan []complex64, 1)
+
+	for _, awaitable := range awaitables {
+		go func() {
+			v, err := awaitable.Result()
+			if err != nil {
+				errCh <- errors.Wrap(err, 0)
+				return
+			}
+			valueCh <- v
+		}()
+	}
+
+	values := [][]complex64{}
+	for {
+		select {
+		case err := <-errCh:
+			return nil, errors.Wrap(err, 0)
+		case value := <-valueCh:
+			values = append(values, value)
+			if len(values) == len(awaitables) {
+				return values, nil
+			}
+		}
+	}
 }
 
-// AnyComplex64SliceAsync is an asynchronous version of AnyComplex64.
-func AnyComplex64SliceAsync(awaitables ...<-chan []complex64) <-chan []complex64 {
-	resolver := make(chan []complex64, 1)
-	go func() {
-		resolver <- AnyComplex64Slice(awaitables...)
-	}()
-	return resolver
+// FastAllComplex64SlicesOrError does the same as AllComplex64SlicesOrError but
+// does not wait for all other tasks to stop. It does tell them to stop it just
+// doesn't wait for them to stop.
+func FastAllComplex64SlicesOrError(awaitables ...*task.Complex64SliceTask) ([][]complex64, error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.AllAsync(stop.ToStopables(v...)...)
+
+	errCh := make(chan error, 1)
+	valueCh := make(chan []complex64, 1)
+
+	for _, awaitable := range awaitables {
+		go func() {
+			v, err := awaitable.Result()
+			if err != nil {
+				errCh <- errors.Wrap(err, 0)
+				return
+			}
+			valueCh <- v
+		}()
+	}
+
+	values := [][]complex64{}
+	for {
+		select {
+		case err := <-errCh:
+			return nil, errors.Wrap(err, 0)
+		case value := <-valueCh:
+			values = append(values, value)
+			if len(values) == len(awaitables) {
+				return values, nil
+			}
+		}
+	}
 }
 
-// AllErrors will wait for every given channel to emit a single result.
-// The results will be returned in a slice ordered the same as the input channels.
-func AllErrors(awaitables ...<-chan error) []error {
+// AllErrors will wait for every given task to emit a result.
+// The results (& errors) will be returned in a slice ordered the
+// same as the input.
+func AllErrors(awaitables ...*task.ErrorTask) ([]error, error) {
 	awaited := []error{}
+	awaitedErrors := []error{}
+
 	for _, awaitable := range awaitables {
-		awaited = append(awaited, <-awaitable)
+		v, e := awaitable.Result()
+		awaited = append(awaited, v)
+		awaitedErrors = append(awaitedErrors, e)
 	}
-	return awaited
+
+	if len(awaitedErrors) > 0 {
+		return nil, errors.New(&ErrTaskFailed{
+			Errors: awaitedErrors,
+		})
+	}
+
+	return awaited, nil
 }
 
-// AllErrorSlices will wait for every given channel to emit a single result.
-// The results will be returned in a slice ordered the same as the input channels.
-func AllErrorSlices(awaitables ...<-chan []error) [][]error {
+// AllErrorSlices will wait for every given task to emit a result.
+// The results (& errors) will be returned in a slice ordered the
+// same as the input.
+func AllErrorSlices(awaitables ...*task.ErrorSliceTask) ([][]error, error) {
 	awaited := [][]error{}
+	awaitedErrors := []error{}
+
 	for _, awaitable := range awaitables {
-		awaited = append(awaited, <-awaitable)
+		v, e := awaitable.Result()
+		awaited = append(awaited, v)
+		awaitedErrors = append(awaitedErrors, e)
 	}
-	return awaited
+
+	if len(awaitedErrors) > 0 {
+		return nil, errors.New(&ErrTaskFailed{
+			Errors: awaitedErrors,
+		})
+	}
+
+	return awaited, nil
 }
 
-// AllErrorsAsync is an asynchronous version of AllErrors
-func AllErrorsAsync(awaitables ...<-chan error) <-chan []error {
-	resolver := make(chan []error, 1)
-	go func() {
-		resolver <- AllErrors(awaitables...)
-	}()
-	return resolver
+// AnyError will wait for the first task to emit a result (or an error)
+// and return that, canceling all other tasks.
+func AnyError(awaitables ...*task.ErrorTask) (value error, err error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.All(stop.ToStopables(v...)...)
+
+	type doneOnce struct {
+		o  sync.Once
+		ch chan struct{}
+	}
+	done := doneOnce{
+		ch: make(chan struct{}, 1),
+	}
+	closeDone := func() {
+		done.o.Do(func() {
+			close(done.ch)
+		})
+	}
+
+	for _, awaitable := range awaitables {
+		go func() {
+			defer closeDone()
+			value, err = awaitable.Result()
+		}()
+	}
+
+	<-done.ch
+	return value, err
 }
 
-// AllErrorSlicesAsync is an asynchronous version of AllErrorSlices
-func AllErrorSlicesAsync(awaitables ...<-chan []error) <-chan [][]error {
-	resolver := make(chan [][]error, 1)
-	go func() {
-		resolver <- AllErrorSlices(awaitables...)
-	}()
-	return resolver
+// FastAnyError does the same as AnyError but does not wait for all
+// other tasks to stop. It does tell them to stop it just doesn't wait for
+// them to stop.
+func FastAnyError(awaitables ...*task.ErrorTask) (value error, err error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.AllAsync(stop.ToStopables(v...)...)
+
+	type doneOnce struct {
+		o  sync.Once
+		ch chan struct{}
+	}
+	done := doneOnce{
+		ch: make(chan struct{}, 1),
+	}
+	closeDone := func() {
+		done.o.Do(func() {
+			close(done.ch)
+		})
+	}
+
+	for _, awaitable := range awaitables {
+		go func() {
+			defer closeDone()
+			value, err = awaitable.Result()
+		}()
+	}
+
+	<-done.ch
+	return value, err
 }
 
-// AnyError will wait for the first channel to emit a single result
-// and return that, ignoring all other channels.
-func AnyError(awaitables ...<-chan error) error {
+// AnyErrorSlice will wait for the first task to emit a result (or an error)
+// and return that, canceling all other tasks.
+func AnyErrorSlice(awaitables ...*task.ErrorSliceTask) (value []error, err error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.All(stop.ToStopables(v...)...)
+
+	type doneOnce struct {
+		o  sync.Once
+		ch chan struct{}
+	}
+	done := doneOnce{
+		ch: make(chan struct{}, 1),
+	}
+	closeDone := func() {
+		done.o.Do(func() {
+			close(done.ch)
+		})
+	}
+
+	for _, awaitable := range awaitables {
+		go func() {
+			defer closeDone()
+			value, err = awaitable.Result()
+		}()
+	}
+
+	<-done.ch
+	return value, err
+}
+
+// FastAnyErrorSlice does the same as AnyErrorSlice but does not wait
+// for all other tasks to stop. It does tell them to stop it just doesn't wait
+// for them to stop.
+func FastAnyErrorSlice(awaitables ...*task.ErrorSliceTask) (value []error, err error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.AllAsync(stop.ToStopables(v...)...)
+
+	type doneOnce struct {
+		o  sync.Once
+		ch chan struct{}
+	}
+	done := doneOnce{
+		ch: make(chan struct{}, 1),
+	}
+	closeDone := func() {
+		done.o.Do(func() {
+			close(done.ch)
+		})
+	}
+
+	for _, awaitable := range awaitables {
+		go func() {
+			defer closeDone()
+			value, err = awaitable.Result()
+		}()
+	}
+
+	<-done.ch
+	return value, err
+}
+
+// AllErrorsOrError will wait for every given task to emit a result or
+// return as soon as an error is encountered, canceling all other tasks.
+func AllErrorsOrError(awaitables ...*task.ErrorTask) ([]error, error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.All(stop.ToStopables(v...)...)
+
+	errCh := make(chan error, 1)
+	valueCh := make(chan error, 1)
+
+	for _, awaitable := range awaitables {
+		go func() {
+			v, err := awaitable.Result()
+			if err != nil {
+				errCh <- errors.Wrap(err, 0)
+				return
+			}
+			valueCh <- v
+		}()
+	}
+
+	values := []error{}
 	for {
-		for _, awaitable := range awaitables {
-			select {
-			default:
-			case awaited := <-awaitable:
-				return awaited
+		select {
+		case err := <-errCh:
+			return nil, errors.Wrap(err, 0)
+		case value := <-valueCh:
+			values = append(values, value)
+			if len(values) == len(awaitables) {
+				return values, nil
 			}
 		}
 	}
 }
 
-// AnyErrorSlice will wait for the first channel to emit a single result
-// and return that, ignoring all other channels.
-func AnyErrorSlice(awaitables ...<-chan []error) []error {
+// FastAllErrorsOrError does the same as AllErrorsOrError but does not
+// wait for all other tasks to stop. It does tell them to stop it just doesn't
+// wait for them to stop.
+func FastAllErrorsOrError(awaitables ...*task.ErrorTask) ([]error, error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.AllAsync(stop.ToStopables(v...)...)
+
+	errCh := make(chan error, 1)
+	valueCh := make(chan error, 1)
+
+	for _, awaitable := range awaitables {
+		go func() {
+			v, err := awaitable.Result()
+			if err != nil {
+				errCh <- errors.Wrap(err, 0)
+				return
+			}
+			valueCh <- v
+		}()
+	}
+
+	values := []error{}
 	for {
-		for _, awaitable := range awaitables {
-			select {
-			default:
-			case awaited := <-awaitable:
-				return awaited
+		select {
+		case err := <-errCh:
+			return nil, errors.Wrap(err, 0)
+		case value := <-valueCh:
+			values = append(values, value)
+			if len(values) == len(awaitables) {
+				return values, nil
 			}
 		}
 	}
 }
 
-// AnyErrorAsync is an asynchronous version of AnyError.
-func AnyErrorAsync(awaitables ...<-chan error) <-chan error {
-	resolver := make(chan error, 1)
-	go func() {
-		resolver <- AnyError(awaitables...)
-	}()
-	return resolver
+// AllErrorSlicesOrError will wait for every given task to emit a result or
+// return as soon as an error is encountered, canceling all other tasks.
+func AllErrorSlicesOrError(awaitables ...*task.ErrorSliceTask) ([][]error, error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.All(stop.ToStopables(v...)...)
+
+	errCh := make(chan error, 1)
+	valueCh := make(chan []error, 1)
+
+	for _, awaitable := range awaitables {
+		go func() {
+			v, err := awaitable.Result()
+			if err != nil {
+				errCh <- errors.Wrap(err, 0)
+				return
+			}
+			valueCh <- v
+		}()
+	}
+
+	values := [][]error{}
+	for {
+		select {
+		case err := <-errCh:
+			return nil, errors.Wrap(err, 0)
+		case value := <-valueCh:
+			values = append(values, value)
+			if len(values) == len(awaitables) {
+				return values, nil
+			}
+		}
+	}
 }
 
-// AnyErrorSliceAsync is an asynchronous version of AnyError.
-func AnyErrorSliceAsync(awaitables ...<-chan []error) <-chan []error {
-	resolver := make(chan []error, 1)
-	go func() {
-		resolver <- AnyErrorSlice(awaitables...)
-	}()
-	return resolver
+// FastAllErrorSlicesOrError does the same as AllErrorSlicesOrError but
+// does not wait for all other tasks to stop. It does tell them to stop it just
+// doesn't wait for them to stop.
+func FastAllErrorSlicesOrError(awaitables ...*task.ErrorSliceTask) ([][]error, error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.AllAsync(stop.ToStopables(v...)...)
+
+	errCh := make(chan error, 1)
+	valueCh := make(chan []error, 1)
+
+	for _, awaitable := range awaitables {
+		go func() {
+			v, err := awaitable.Result()
+			if err != nil {
+				errCh <- errors.Wrap(err, 0)
+				return
+			}
+			valueCh <- v
+		}()
+	}
+
+	values := [][]error{}
+	for {
+		select {
+		case err := <-errCh:
+			return nil, errors.Wrap(err, 0)
+		case value := <-valueCh:
+			values = append(values, value)
+			if len(values) == len(awaitables) {
+				return values, nil
+			}
+		}
+	}
 }
 
-// AllFloat32s will wait for every given channel to emit a single result.
-// The results will be returned in a slice ordered the same as the input channels.
-func AllFloat32s(awaitables ...<-chan float32) []float32 {
+// AllFloat32s will wait for every given task to emit a result.
+// The results (& errors) will be returned in a slice ordered the
+// same as the input.
+func AllFloat32s(awaitables ...*task.Float32Task) ([]float32, error) {
 	awaited := []float32{}
+	awaitedErrors := []error{}
+
 	for _, awaitable := range awaitables {
-		awaited = append(awaited, <-awaitable)
+		v, e := awaitable.Result()
+		awaited = append(awaited, v)
+		awaitedErrors = append(awaitedErrors, e)
 	}
-	return awaited
+
+	if len(awaitedErrors) > 0 {
+		return nil, errors.New(&ErrTaskFailed{
+			Errors: awaitedErrors,
+		})
+	}
+
+	return awaited, nil
 }
 
-// AllFloat32Slices will wait for every given channel to emit a single result.
-// The results will be returned in a slice ordered the same as the input channels.
-func AllFloat32Slices(awaitables ...<-chan []float32) [][]float32 {
+// AllFloat32Slices will wait for every given task to emit a result.
+// The results (& errors) will be returned in a slice ordered the
+// same as the input.
+func AllFloat32Slices(awaitables ...*task.Float32SliceTask) ([][]float32, error) {
 	awaited := [][]float32{}
+	awaitedErrors := []error{}
+
 	for _, awaitable := range awaitables {
-		awaited = append(awaited, <-awaitable)
+		v, e := awaitable.Result()
+		awaited = append(awaited, v)
+		awaitedErrors = append(awaitedErrors, e)
 	}
-	return awaited
+
+	if len(awaitedErrors) > 0 {
+		return nil, errors.New(&ErrTaskFailed{
+			Errors: awaitedErrors,
+		})
+	}
+
+	return awaited, nil
 }
 
-// AllFloat32sAsync is an asynchronous version of AllFloat32s
-func AllFloat32sAsync(awaitables ...<-chan float32) <-chan []float32 {
-	resolver := make(chan []float32, 1)
-	go func() {
-		resolver <- AllFloat32s(awaitables...)
-	}()
-	return resolver
+// AnyFloat32 will wait for the first task to emit a result (or an error)
+// and return that, canceling all other tasks.
+func AnyFloat32(awaitables ...*task.Float32Task) (value float32, err error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.All(stop.ToStopables(v...)...)
+
+	type doneOnce struct {
+		o  sync.Once
+		ch chan struct{}
+	}
+	done := doneOnce{
+		ch: make(chan struct{}, 1),
+	}
+	closeDone := func() {
+		done.o.Do(func() {
+			close(done.ch)
+		})
+	}
+
+	for _, awaitable := range awaitables {
+		go func() {
+			defer closeDone()
+			value, err = awaitable.Result()
+		}()
+	}
+
+	<-done.ch
+	return value, err
 }
 
-// AllFloat32SlicesAsync is an asynchronous version of AllFloat32Slices
-func AllFloat32SlicesAsync(awaitables ...<-chan []float32) <-chan [][]float32 {
-	resolver := make(chan [][]float32, 1)
-	go func() {
-		resolver <- AllFloat32Slices(awaitables...)
-	}()
-	return resolver
+// FastAnyFloat32 does the same as AnyFloat32 but does not wait for all
+// other tasks to stop. It does tell them to stop it just doesn't wait for
+// them to stop.
+func FastAnyFloat32(awaitables ...*task.Float32Task) (value float32, err error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.AllAsync(stop.ToStopables(v...)...)
+
+	type doneOnce struct {
+		o  sync.Once
+		ch chan struct{}
+	}
+	done := doneOnce{
+		ch: make(chan struct{}, 1),
+	}
+	closeDone := func() {
+		done.o.Do(func() {
+			close(done.ch)
+		})
+	}
+
+	for _, awaitable := range awaitables {
+		go func() {
+			defer closeDone()
+			value, err = awaitable.Result()
+		}()
+	}
+
+	<-done.ch
+	return value, err
 }
 
-// AnyFloat32 will wait for the first channel to emit a single result
-// and return that, ignoring all other channels.
-func AnyFloat32(awaitables ...<-chan float32) float32 {
+// AnyFloat32Slice will wait for the first task to emit a result (or an error)
+// and return that, canceling all other tasks.
+func AnyFloat32Slice(awaitables ...*task.Float32SliceTask) (value []float32, err error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.All(stop.ToStopables(v...)...)
+
+	type doneOnce struct {
+		o  sync.Once
+		ch chan struct{}
+	}
+	done := doneOnce{
+		ch: make(chan struct{}, 1),
+	}
+	closeDone := func() {
+		done.o.Do(func() {
+			close(done.ch)
+		})
+	}
+
+	for _, awaitable := range awaitables {
+		go func() {
+			defer closeDone()
+			value, err = awaitable.Result()
+		}()
+	}
+
+	<-done.ch
+	return value, err
+}
+
+// FastAnyFloat32Slice does the same as AnyFloat32Slice but does not wait
+// for all other tasks to stop. It does tell them to stop it just doesn't wait
+// for them to stop.
+func FastAnyFloat32Slice(awaitables ...*task.Float32SliceTask) (value []float32, err error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.AllAsync(stop.ToStopables(v...)...)
+
+	type doneOnce struct {
+		o  sync.Once
+		ch chan struct{}
+	}
+	done := doneOnce{
+		ch: make(chan struct{}, 1),
+	}
+	closeDone := func() {
+		done.o.Do(func() {
+			close(done.ch)
+		})
+	}
+
+	for _, awaitable := range awaitables {
+		go func() {
+			defer closeDone()
+			value, err = awaitable.Result()
+		}()
+	}
+
+	<-done.ch
+	return value, err
+}
+
+// AllFloat32sOrError will wait for every given task to emit a result or
+// return as soon as an error is encountered, canceling all other tasks.
+func AllFloat32sOrError(awaitables ...*task.Float32Task) ([]float32, error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.All(stop.ToStopables(v...)...)
+
+	errCh := make(chan error, 1)
+	valueCh := make(chan float32, 1)
+
+	for _, awaitable := range awaitables {
+		go func() {
+			v, err := awaitable.Result()
+			if err != nil {
+				errCh <- errors.Wrap(err, 0)
+				return
+			}
+			valueCh <- v
+		}()
+	}
+
+	values := []float32{}
 	for {
-		for _, awaitable := range awaitables {
-			select {
-			default:
-			case awaited := <-awaitable:
-				return awaited
+		select {
+		case err := <-errCh:
+			return nil, errors.Wrap(err, 0)
+		case value := <-valueCh:
+			values = append(values, value)
+			if len(values) == len(awaitables) {
+				return values, nil
 			}
 		}
 	}
 }
 
-// AnyFloat32Slice will wait for the first channel to emit a single result
-// and return that, ignoring all other channels.
-func AnyFloat32Slice(awaitables ...<-chan []float32) []float32 {
+// FastAllFloat32sOrError does the same as AllFloat32sOrError but does not
+// wait for all other tasks to stop. It does tell them to stop it just doesn't
+// wait for them to stop.
+func FastAllFloat32sOrError(awaitables ...*task.Float32Task) ([]float32, error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.AllAsync(stop.ToStopables(v...)...)
+
+	errCh := make(chan error, 1)
+	valueCh := make(chan float32, 1)
+
+	for _, awaitable := range awaitables {
+		go func() {
+			v, err := awaitable.Result()
+			if err != nil {
+				errCh <- errors.Wrap(err, 0)
+				return
+			}
+			valueCh <- v
+		}()
+	}
+
+	values := []float32{}
 	for {
-		for _, awaitable := range awaitables {
-			select {
-			default:
-			case awaited := <-awaitable:
-				return awaited
+		select {
+		case err := <-errCh:
+			return nil, errors.Wrap(err, 0)
+		case value := <-valueCh:
+			values = append(values, value)
+			if len(values) == len(awaitables) {
+				return values, nil
 			}
 		}
 	}
 }
 
-// AnyFloat32Async is an asynchronous version of AnyFloat32.
-func AnyFloat32Async(awaitables ...<-chan float32) <-chan float32 {
-	resolver := make(chan float32, 1)
-	go func() {
-		resolver <- AnyFloat32(awaitables...)
-	}()
-	return resolver
+// AllFloat32SlicesOrError will wait for every given task to emit a result or
+// return as soon as an error is encountered, canceling all other tasks.
+func AllFloat32SlicesOrError(awaitables ...*task.Float32SliceTask) ([][]float32, error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.All(stop.ToStopables(v...)...)
+
+	errCh := make(chan error, 1)
+	valueCh := make(chan []float32, 1)
+
+	for _, awaitable := range awaitables {
+		go func() {
+			v, err := awaitable.Result()
+			if err != nil {
+				errCh <- errors.Wrap(err, 0)
+				return
+			}
+			valueCh <- v
+		}()
+	}
+
+	values := [][]float32{}
+	for {
+		select {
+		case err := <-errCh:
+			return nil, errors.Wrap(err, 0)
+		case value := <-valueCh:
+			values = append(values, value)
+			if len(values) == len(awaitables) {
+				return values, nil
+			}
+		}
+	}
 }
 
-// AnyFloat32SliceAsync is an asynchronous version of AnyFloat32.
-func AnyFloat32SliceAsync(awaitables ...<-chan []float32) <-chan []float32 {
-	resolver := make(chan []float32, 1)
-	go func() {
-		resolver <- AnyFloat32Slice(awaitables...)
-	}()
-	return resolver
+// FastAllFloat32SlicesOrError does the same as AllFloat32SlicesOrError but
+// does not wait for all other tasks to stop. It does tell them to stop it just
+// doesn't wait for them to stop.
+func FastAllFloat32SlicesOrError(awaitables ...*task.Float32SliceTask) ([][]float32, error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.AllAsync(stop.ToStopables(v...)...)
+
+	errCh := make(chan error, 1)
+	valueCh := make(chan []float32, 1)
+
+	for _, awaitable := range awaitables {
+		go func() {
+			v, err := awaitable.Result()
+			if err != nil {
+				errCh <- errors.Wrap(err, 0)
+				return
+			}
+			valueCh <- v
+		}()
+	}
+
+	values := [][]float32{}
+	for {
+		select {
+		case err := <-errCh:
+			return nil, errors.Wrap(err, 0)
+		case value := <-valueCh:
+			values = append(values, value)
+			if len(values) == len(awaitables) {
+				return values, nil
+			}
+		}
+	}
 }
 
-// AllFloat64s will wait for every given channel to emit a single result.
-// The results will be returned in a slice ordered the same as the input channels.
-func AllFloat64s(awaitables ...<-chan float64) []float64 {
+// AllFloat64s will wait for every given task to emit a result.
+// The results (& errors) will be returned in a slice ordered the
+// same as the input.
+func AllFloat64s(awaitables ...*task.Float64Task) ([]float64, error) {
 	awaited := []float64{}
+	awaitedErrors := []error{}
+
 	for _, awaitable := range awaitables {
-		awaited = append(awaited, <-awaitable)
+		v, e := awaitable.Result()
+		awaited = append(awaited, v)
+		awaitedErrors = append(awaitedErrors, e)
 	}
-	return awaited
+
+	if len(awaitedErrors) > 0 {
+		return nil, errors.New(&ErrTaskFailed{
+			Errors: awaitedErrors,
+		})
+	}
+
+	return awaited, nil
 }
 
-// AllFloat64Slices will wait for every given channel to emit a single result.
-// The results will be returned in a slice ordered the same as the input channels.
-func AllFloat64Slices(awaitables ...<-chan []float64) [][]float64 {
+// AllFloat64Slices will wait for every given task to emit a result.
+// The results (& errors) will be returned in a slice ordered the
+// same as the input.
+func AllFloat64Slices(awaitables ...*task.Float64SliceTask) ([][]float64, error) {
 	awaited := [][]float64{}
+	awaitedErrors := []error{}
+
 	for _, awaitable := range awaitables {
-		awaited = append(awaited, <-awaitable)
+		v, e := awaitable.Result()
+		awaited = append(awaited, v)
+		awaitedErrors = append(awaitedErrors, e)
 	}
-	return awaited
+
+	if len(awaitedErrors) > 0 {
+		return nil, errors.New(&ErrTaskFailed{
+			Errors: awaitedErrors,
+		})
+	}
+
+	return awaited, nil
 }
 
-// AllFloat64sAsync is an asynchronous version of AllFloat64s
-func AllFloat64sAsync(awaitables ...<-chan float64) <-chan []float64 {
-	resolver := make(chan []float64, 1)
-	go func() {
-		resolver <- AllFloat64s(awaitables...)
-	}()
-	return resolver
+// AnyFloat64 will wait for the first task to emit a result (or an error)
+// and return that, canceling all other tasks.
+func AnyFloat64(awaitables ...*task.Float64Task) (value float64, err error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.All(stop.ToStopables(v...)...)
+
+	type doneOnce struct {
+		o  sync.Once
+		ch chan struct{}
+	}
+	done := doneOnce{
+		ch: make(chan struct{}, 1),
+	}
+	closeDone := func() {
+		done.o.Do(func() {
+			close(done.ch)
+		})
+	}
+
+	for _, awaitable := range awaitables {
+		go func() {
+			defer closeDone()
+			value, err = awaitable.Result()
+		}()
+	}
+
+	<-done.ch
+	return value, err
 }
 
-// AllFloat64SlicesAsync is an asynchronous version of AllFloat64Slices
-func AllFloat64SlicesAsync(awaitables ...<-chan []float64) <-chan [][]float64 {
-	resolver := make(chan [][]float64, 1)
-	go func() {
-		resolver <- AllFloat64Slices(awaitables...)
-	}()
-	return resolver
+// FastAnyFloat64 does the same as AnyFloat64 but does not wait for all
+// other tasks to stop. It does tell them to stop it just doesn't wait for
+// them to stop.
+func FastAnyFloat64(awaitables ...*task.Float64Task) (value float64, err error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.AllAsync(stop.ToStopables(v...)...)
+
+	type doneOnce struct {
+		o  sync.Once
+		ch chan struct{}
+	}
+	done := doneOnce{
+		ch: make(chan struct{}, 1),
+	}
+	closeDone := func() {
+		done.o.Do(func() {
+			close(done.ch)
+		})
+	}
+
+	for _, awaitable := range awaitables {
+		go func() {
+			defer closeDone()
+			value, err = awaitable.Result()
+		}()
+	}
+
+	<-done.ch
+	return value, err
 }
 
-// AnyFloat64 will wait for the first channel to emit a single result
-// and return that, ignoring all other channels.
-func AnyFloat64(awaitables ...<-chan float64) float64 {
+// AnyFloat64Slice will wait for the first task to emit a result (or an error)
+// and return that, canceling all other tasks.
+func AnyFloat64Slice(awaitables ...*task.Float64SliceTask) (value []float64, err error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.All(stop.ToStopables(v...)...)
+
+	type doneOnce struct {
+		o  sync.Once
+		ch chan struct{}
+	}
+	done := doneOnce{
+		ch: make(chan struct{}, 1),
+	}
+	closeDone := func() {
+		done.o.Do(func() {
+			close(done.ch)
+		})
+	}
+
+	for _, awaitable := range awaitables {
+		go func() {
+			defer closeDone()
+			value, err = awaitable.Result()
+		}()
+	}
+
+	<-done.ch
+	return value, err
+}
+
+// FastAnyFloat64Slice does the same as AnyFloat64Slice but does not wait
+// for all other tasks to stop. It does tell them to stop it just doesn't wait
+// for them to stop.
+func FastAnyFloat64Slice(awaitables ...*task.Float64SliceTask) (value []float64, err error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.AllAsync(stop.ToStopables(v...)...)
+
+	type doneOnce struct {
+		o  sync.Once
+		ch chan struct{}
+	}
+	done := doneOnce{
+		ch: make(chan struct{}, 1),
+	}
+	closeDone := func() {
+		done.o.Do(func() {
+			close(done.ch)
+		})
+	}
+
+	for _, awaitable := range awaitables {
+		go func() {
+			defer closeDone()
+			value, err = awaitable.Result()
+		}()
+	}
+
+	<-done.ch
+	return value, err
+}
+
+// AllFloat64sOrError will wait for every given task to emit a result or
+// return as soon as an error is encountered, canceling all other tasks.
+func AllFloat64sOrError(awaitables ...*task.Float64Task) ([]float64, error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.All(stop.ToStopables(v...)...)
+
+	errCh := make(chan error, 1)
+	valueCh := make(chan float64, 1)
+
+	for _, awaitable := range awaitables {
+		go func() {
+			v, err := awaitable.Result()
+			if err != nil {
+				errCh <- errors.Wrap(err, 0)
+				return
+			}
+			valueCh <- v
+		}()
+	}
+
+	values := []float64{}
 	for {
-		for _, awaitable := range awaitables {
-			select {
-			default:
-			case awaited := <-awaitable:
-				return awaited
+		select {
+		case err := <-errCh:
+			return nil, errors.Wrap(err, 0)
+		case value := <-valueCh:
+			values = append(values, value)
+			if len(values) == len(awaitables) {
+				return values, nil
 			}
 		}
 	}
 }
 
-// AnyFloat64Slice will wait for the first channel to emit a single result
-// and return that, ignoring all other channels.
-func AnyFloat64Slice(awaitables ...<-chan []float64) []float64 {
+// FastAllFloat64sOrError does the same as AllFloat64sOrError but does not
+// wait for all other tasks to stop. It does tell them to stop it just doesn't
+// wait for them to stop.
+func FastAllFloat64sOrError(awaitables ...*task.Float64Task) ([]float64, error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.AllAsync(stop.ToStopables(v...)...)
+
+	errCh := make(chan error, 1)
+	valueCh := make(chan float64, 1)
+
+	for _, awaitable := range awaitables {
+		go func() {
+			v, err := awaitable.Result()
+			if err != nil {
+				errCh <- errors.Wrap(err, 0)
+				return
+			}
+			valueCh <- v
+		}()
+	}
+
+	values := []float64{}
 	for {
-		for _, awaitable := range awaitables {
-			select {
-			default:
-			case awaited := <-awaitable:
-				return awaited
+		select {
+		case err := <-errCh:
+			return nil, errors.Wrap(err, 0)
+		case value := <-valueCh:
+			values = append(values, value)
+			if len(values) == len(awaitables) {
+				return values, nil
 			}
 		}
 	}
 }
 
-// AnyFloat64Async is an asynchronous version of AnyFloat64.
-func AnyFloat64Async(awaitables ...<-chan float64) <-chan float64 {
-	resolver := make(chan float64, 1)
-	go func() {
-		resolver <- AnyFloat64(awaitables...)
-	}()
-	return resolver
+// AllFloat64SlicesOrError will wait for every given task to emit a result or
+// return as soon as an error is encountered, canceling all other tasks.
+func AllFloat64SlicesOrError(awaitables ...*task.Float64SliceTask) ([][]float64, error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.All(stop.ToStopables(v...)...)
+
+	errCh := make(chan error, 1)
+	valueCh := make(chan []float64, 1)
+
+	for _, awaitable := range awaitables {
+		go func() {
+			v, err := awaitable.Result()
+			if err != nil {
+				errCh <- errors.Wrap(err, 0)
+				return
+			}
+			valueCh <- v
+		}()
+	}
+
+	values := [][]float64{}
+	for {
+		select {
+		case err := <-errCh:
+			return nil, errors.Wrap(err, 0)
+		case value := <-valueCh:
+			values = append(values, value)
+			if len(values) == len(awaitables) {
+				return values, nil
+			}
+		}
+	}
 }
 
-// AnyFloat64SliceAsync is an asynchronous version of AnyFloat64.
-func AnyFloat64SliceAsync(awaitables ...<-chan []float64) <-chan []float64 {
-	resolver := make(chan []float64, 1)
-	go func() {
-		resolver <- AnyFloat64Slice(awaitables...)
-	}()
-	return resolver
+// FastAllFloat64SlicesOrError does the same as AllFloat64SlicesOrError but
+// does not wait for all other tasks to stop. It does tell them to stop it just
+// doesn't wait for them to stop.
+func FastAllFloat64SlicesOrError(awaitables ...*task.Float64SliceTask) ([][]float64, error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.AllAsync(stop.ToStopables(v...)...)
+
+	errCh := make(chan error, 1)
+	valueCh := make(chan []float64, 1)
+
+	for _, awaitable := range awaitables {
+		go func() {
+			v, err := awaitable.Result()
+			if err != nil {
+				errCh <- errors.Wrap(err, 0)
+				return
+			}
+			valueCh <- v
+		}()
+	}
+
+	values := [][]float64{}
+	for {
+		select {
+		case err := <-errCh:
+			return nil, errors.Wrap(err, 0)
+		case value := <-valueCh:
+			values = append(values, value)
+			if len(values) == len(awaitables) {
+				return values, nil
+			}
+		}
+	}
 }
 
-// AllInts will wait for every given channel to emit a single result.
-// The results will be returned in a slice ordered the same as the input channels.
-func AllInts(awaitables ...<-chan int) []int {
+// AllInts will wait for every given task to emit a result.
+// The results (& errors) will be returned in a slice ordered the
+// same as the input.
+func AllInts(awaitables ...*task.IntTask) ([]int, error) {
 	awaited := []int{}
+	awaitedErrors := []error{}
+
 	for _, awaitable := range awaitables {
-		awaited = append(awaited, <-awaitable)
+		v, e := awaitable.Result()
+		awaited = append(awaited, v)
+		awaitedErrors = append(awaitedErrors, e)
 	}
-	return awaited
+
+	if len(awaitedErrors) > 0 {
+		return nil, errors.New(&ErrTaskFailed{
+			Errors: awaitedErrors,
+		})
+	}
+
+	return awaited, nil
 }
 
-// AllIntSlices will wait for every given channel to emit a single result.
-// The results will be returned in a slice ordered the same as the input channels.
-func AllIntSlices(awaitables ...<-chan []int) [][]int {
+// AllIntSlices will wait for every given task to emit a result.
+// The results (& errors) will be returned in a slice ordered the
+// same as the input.
+func AllIntSlices(awaitables ...*task.IntSliceTask) ([][]int, error) {
 	awaited := [][]int{}
+	awaitedErrors := []error{}
+
 	for _, awaitable := range awaitables {
-		awaited = append(awaited, <-awaitable)
+		v, e := awaitable.Result()
+		awaited = append(awaited, v)
+		awaitedErrors = append(awaitedErrors, e)
 	}
-	return awaited
+
+	if len(awaitedErrors) > 0 {
+		return nil, errors.New(&ErrTaskFailed{
+			Errors: awaitedErrors,
+		})
+	}
+
+	return awaited, nil
 }
 
-// AllIntsAsync is an asynchronous version of AllInts
-func AllIntsAsync(awaitables ...<-chan int) <-chan []int {
-	resolver := make(chan []int, 1)
-	go func() {
-		resolver <- AllInts(awaitables...)
-	}()
-	return resolver
+// AnyInt will wait for the first task to emit a result (or an error)
+// and return that, canceling all other tasks.
+func AnyInt(awaitables ...*task.IntTask) (value int, err error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.All(stop.ToStopables(v...)...)
+
+	type doneOnce struct {
+		o  sync.Once
+		ch chan struct{}
+	}
+	done := doneOnce{
+		ch: make(chan struct{}, 1),
+	}
+	closeDone := func() {
+		done.o.Do(func() {
+			close(done.ch)
+		})
+	}
+
+	for _, awaitable := range awaitables {
+		go func() {
+			defer closeDone()
+			value, err = awaitable.Result()
+		}()
+	}
+
+	<-done.ch
+	return value, err
 }
 
-// AllIntSlicesAsync is an asynchronous version of AllIntSlices
-func AllIntSlicesAsync(awaitables ...<-chan []int) <-chan [][]int {
-	resolver := make(chan [][]int, 1)
-	go func() {
-		resolver <- AllIntSlices(awaitables...)
-	}()
-	return resolver
+// FastAnyInt does the same as AnyInt but does not wait for all
+// other tasks to stop. It does tell them to stop it just doesn't wait for
+// them to stop.
+func FastAnyInt(awaitables ...*task.IntTask) (value int, err error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.AllAsync(stop.ToStopables(v...)...)
+
+	type doneOnce struct {
+		o  sync.Once
+		ch chan struct{}
+	}
+	done := doneOnce{
+		ch: make(chan struct{}, 1),
+	}
+	closeDone := func() {
+		done.o.Do(func() {
+			close(done.ch)
+		})
+	}
+
+	for _, awaitable := range awaitables {
+		go func() {
+			defer closeDone()
+			value, err = awaitable.Result()
+		}()
+	}
+
+	<-done.ch
+	return value, err
 }
 
-// AnyInt will wait for the first channel to emit a single result
-// and return that, ignoring all other channels.
-func AnyInt(awaitables ...<-chan int) int {
+// AnyIntSlice will wait for the first task to emit a result (or an error)
+// and return that, canceling all other tasks.
+func AnyIntSlice(awaitables ...*task.IntSliceTask) (value []int, err error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.All(stop.ToStopables(v...)...)
+
+	type doneOnce struct {
+		o  sync.Once
+		ch chan struct{}
+	}
+	done := doneOnce{
+		ch: make(chan struct{}, 1),
+	}
+	closeDone := func() {
+		done.o.Do(func() {
+			close(done.ch)
+		})
+	}
+
+	for _, awaitable := range awaitables {
+		go func() {
+			defer closeDone()
+			value, err = awaitable.Result()
+		}()
+	}
+
+	<-done.ch
+	return value, err
+}
+
+// FastAnyIntSlice does the same as AnyIntSlice but does not wait
+// for all other tasks to stop. It does tell them to stop it just doesn't wait
+// for them to stop.
+func FastAnyIntSlice(awaitables ...*task.IntSliceTask) (value []int, err error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.AllAsync(stop.ToStopables(v...)...)
+
+	type doneOnce struct {
+		o  sync.Once
+		ch chan struct{}
+	}
+	done := doneOnce{
+		ch: make(chan struct{}, 1),
+	}
+	closeDone := func() {
+		done.o.Do(func() {
+			close(done.ch)
+		})
+	}
+
+	for _, awaitable := range awaitables {
+		go func() {
+			defer closeDone()
+			value, err = awaitable.Result()
+		}()
+	}
+
+	<-done.ch
+	return value, err
+}
+
+// AllIntsOrError will wait for every given task to emit a result or
+// return as soon as an error is encountered, canceling all other tasks.
+func AllIntsOrError(awaitables ...*task.IntTask) ([]int, error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.All(stop.ToStopables(v...)...)
+
+	errCh := make(chan error, 1)
+	valueCh := make(chan int, 1)
+
+	for _, awaitable := range awaitables {
+		go func() {
+			v, err := awaitable.Result()
+			if err != nil {
+				errCh <- errors.Wrap(err, 0)
+				return
+			}
+			valueCh <- v
+		}()
+	}
+
+	values := []int{}
 	for {
-		for _, awaitable := range awaitables {
-			select {
-			default:
-			case awaited := <-awaitable:
-				return awaited
+		select {
+		case err := <-errCh:
+			return nil, errors.Wrap(err, 0)
+		case value := <-valueCh:
+			values = append(values, value)
+			if len(values) == len(awaitables) {
+				return values, nil
 			}
 		}
 	}
 }
 
-// AnyIntSlice will wait for the first channel to emit a single result
-// and return that, ignoring all other channels.
-func AnyIntSlice(awaitables ...<-chan []int) []int {
+// FastAllIntsOrError does the same as AllIntsOrError but does not
+// wait for all other tasks to stop. It does tell them to stop it just doesn't
+// wait for them to stop.
+func FastAllIntsOrError(awaitables ...*task.IntTask) ([]int, error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.AllAsync(stop.ToStopables(v...)...)
+
+	errCh := make(chan error, 1)
+	valueCh := make(chan int, 1)
+
+	for _, awaitable := range awaitables {
+		go func() {
+			v, err := awaitable.Result()
+			if err != nil {
+				errCh <- errors.Wrap(err, 0)
+				return
+			}
+			valueCh <- v
+		}()
+	}
+
+	values := []int{}
 	for {
-		for _, awaitable := range awaitables {
-			select {
-			default:
-			case awaited := <-awaitable:
-				return awaited
+		select {
+		case err := <-errCh:
+			return nil, errors.Wrap(err, 0)
+		case value := <-valueCh:
+			values = append(values, value)
+			if len(values) == len(awaitables) {
+				return values, nil
 			}
 		}
 	}
 }
 
-// AnyIntAsync is an asynchronous version of AnyInt.
-func AnyIntAsync(awaitables ...<-chan int) <-chan int {
-	resolver := make(chan int, 1)
-	go func() {
-		resolver <- AnyInt(awaitables...)
-	}()
-	return resolver
+// AllIntSlicesOrError will wait for every given task to emit a result or
+// return as soon as an error is encountered, canceling all other tasks.
+func AllIntSlicesOrError(awaitables ...*task.IntSliceTask) ([][]int, error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.All(stop.ToStopables(v...)...)
+
+	errCh := make(chan error, 1)
+	valueCh := make(chan []int, 1)
+
+	for _, awaitable := range awaitables {
+		go func() {
+			v, err := awaitable.Result()
+			if err != nil {
+				errCh <- errors.Wrap(err, 0)
+				return
+			}
+			valueCh <- v
+		}()
+	}
+
+	values := [][]int{}
+	for {
+		select {
+		case err := <-errCh:
+			return nil, errors.Wrap(err, 0)
+		case value := <-valueCh:
+			values = append(values, value)
+			if len(values) == len(awaitables) {
+				return values, nil
+			}
+		}
+	}
 }
 
-// AnyIntSliceAsync is an asynchronous version of AnyInt.
-func AnyIntSliceAsync(awaitables ...<-chan []int) <-chan []int {
-	resolver := make(chan []int, 1)
-	go func() {
-		resolver <- AnyIntSlice(awaitables...)
-	}()
-	return resolver
+// FastAllIntSlicesOrError does the same as AllIntSlicesOrError but
+// does not wait for all other tasks to stop. It does tell them to stop it just
+// doesn't wait for them to stop.
+func FastAllIntSlicesOrError(awaitables ...*task.IntSliceTask) ([][]int, error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.AllAsync(stop.ToStopables(v...)...)
+
+	errCh := make(chan error, 1)
+	valueCh := make(chan []int, 1)
+
+	for _, awaitable := range awaitables {
+		go func() {
+			v, err := awaitable.Result()
+			if err != nil {
+				errCh <- errors.Wrap(err, 0)
+				return
+			}
+			valueCh <- v
+		}()
+	}
+
+	values := [][]int{}
+	for {
+		select {
+		case err := <-errCh:
+			return nil, errors.Wrap(err, 0)
+		case value := <-valueCh:
+			values = append(values, value)
+			if len(values) == len(awaitables) {
+				return values, nil
+			}
+		}
+	}
 }
 
-// AllInt16s will wait for every given channel to emit a single result.
-// The results will be returned in a slice ordered the same as the input channels.
-func AllInt16s(awaitables ...<-chan int16) []int16 {
+// AllInt16s will wait for every given task to emit a result.
+// The results (& errors) will be returned in a slice ordered the
+// same as the input.
+func AllInt16s(awaitables ...*task.Int16Task) ([]int16, error) {
 	awaited := []int16{}
+	awaitedErrors := []error{}
+
 	for _, awaitable := range awaitables {
-		awaited = append(awaited, <-awaitable)
+		v, e := awaitable.Result()
+		awaited = append(awaited, v)
+		awaitedErrors = append(awaitedErrors, e)
 	}
-	return awaited
+
+	if len(awaitedErrors) > 0 {
+		return nil, errors.New(&ErrTaskFailed{
+			Errors: awaitedErrors,
+		})
+	}
+
+	return awaited, nil
 }
 
-// AllInt16Slices will wait for every given channel to emit a single result.
-// The results will be returned in a slice ordered the same as the input channels.
-func AllInt16Slices(awaitables ...<-chan []int16) [][]int16 {
+// AllInt16Slices will wait for every given task to emit a result.
+// The results (& errors) will be returned in a slice ordered the
+// same as the input.
+func AllInt16Slices(awaitables ...*task.Int16SliceTask) ([][]int16, error) {
 	awaited := [][]int16{}
+	awaitedErrors := []error{}
+
 	for _, awaitable := range awaitables {
-		awaited = append(awaited, <-awaitable)
+		v, e := awaitable.Result()
+		awaited = append(awaited, v)
+		awaitedErrors = append(awaitedErrors, e)
 	}
-	return awaited
+
+	if len(awaitedErrors) > 0 {
+		return nil, errors.New(&ErrTaskFailed{
+			Errors: awaitedErrors,
+		})
+	}
+
+	return awaited, nil
 }
 
-// AllInt16sAsync is an asynchronous version of AllInt16s
-func AllInt16sAsync(awaitables ...<-chan int16) <-chan []int16 {
-	resolver := make(chan []int16, 1)
-	go func() {
-		resolver <- AllInt16s(awaitables...)
-	}()
-	return resolver
+// AnyInt16 will wait for the first task to emit a result (or an error)
+// and return that, canceling all other tasks.
+func AnyInt16(awaitables ...*task.Int16Task) (value int16, err error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.All(stop.ToStopables(v...)...)
+
+	type doneOnce struct {
+		o  sync.Once
+		ch chan struct{}
+	}
+	done := doneOnce{
+		ch: make(chan struct{}, 1),
+	}
+	closeDone := func() {
+		done.o.Do(func() {
+			close(done.ch)
+		})
+	}
+
+	for _, awaitable := range awaitables {
+		go func() {
+			defer closeDone()
+			value, err = awaitable.Result()
+		}()
+	}
+
+	<-done.ch
+	return value, err
 }
 
-// AllInt16SlicesAsync is an asynchronous version of AllInt16Slices
-func AllInt16SlicesAsync(awaitables ...<-chan []int16) <-chan [][]int16 {
-	resolver := make(chan [][]int16, 1)
-	go func() {
-		resolver <- AllInt16Slices(awaitables...)
-	}()
-	return resolver
+// FastAnyInt16 does the same as AnyInt16 but does not wait for all
+// other tasks to stop. It does tell them to stop it just doesn't wait for
+// them to stop.
+func FastAnyInt16(awaitables ...*task.Int16Task) (value int16, err error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.AllAsync(stop.ToStopables(v...)...)
+
+	type doneOnce struct {
+		o  sync.Once
+		ch chan struct{}
+	}
+	done := doneOnce{
+		ch: make(chan struct{}, 1),
+	}
+	closeDone := func() {
+		done.o.Do(func() {
+			close(done.ch)
+		})
+	}
+
+	for _, awaitable := range awaitables {
+		go func() {
+			defer closeDone()
+			value, err = awaitable.Result()
+		}()
+	}
+
+	<-done.ch
+	return value, err
 }
 
-// AnyInt16 will wait for the first channel to emit a single result
-// and return that, ignoring all other channels.
-func AnyInt16(awaitables ...<-chan int16) int16 {
+// AnyInt16Slice will wait for the first task to emit a result (or an error)
+// and return that, canceling all other tasks.
+func AnyInt16Slice(awaitables ...*task.Int16SliceTask) (value []int16, err error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.All(stop.ToStopables(v...)...)
+
+	type doneOnce struct {
+		o  sync.Once
+		ch chan struct{}
+	}
+	done := doneOnce{
+		ch: make(chan struct{}, 1),
+	}
+	closeDone := func() {
+		done.o.Do(func() {
+			close(done.ch)
+		})
+	}
+
+	for _, awaitable := range awaitables {
+		go func() {
+			defer closeDone()
+			value, err = awaitable.Result()
+		}()
+	}
+
+	<-done.ch
+	return value, err
+}
+
+// FastAnyInt16Slice does the same as AnyInt16Slice but does not wait
+// for all other tasks to stop. It does tell them to stop it just doesn't wait
+// for them to stop.
+func FastAnyInt16Slice(awaitables ...*task.Int16SliceTask) (value []int16, err error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.AllAsync(stop.ToStopables(v...)...)
+
+	type doneOnce struct {
+		o  sync.Once
+		ch chan struct{}
+	}
+	done := doneOnce{
+		ch: make(chan struct{}, 1),
+	}
+	closeDone := func() {
+		done.o.Do(func() {
+			close(done.ch)
+		})
+	}
+
+	for _, awaitable := range awaitables {
+		go func() {
+			defer closeDone()
+			value, err = awaitable.Result()
+		}()
+	}
+
+	<-done.ch
+	return value, err
+}
+
+// AllInt16sOrError will wait for every given task to emit a result or
+// return as soon as an error is encountered, canceling all other tasks.
+func AllInt16sOrError(awaitables ...*task.Int16Task) ([]int16, error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.All(stop.ToStopables(v...)...)
+
+	errCh := make(chan error, 1)
+	valueCh := make(chan int16, 1)
+
+	for _, awaitable := range awaitables {
+		go func() {
+			v, err := awaitable.Result()
+			if err != nil {
+				errCh <- errors.Wrap(err, 0)
+				return
+			}
+			valueCh <- v
+		}()
+	}
+
+	values := []int16{}
 	for {
-		for _, awaitable := range awaitables {
-			select {
-			default:
-			case awaited := <-awaitable:
-				return awaited
+		select {
+		case err := <-errCh:
+			return nil, errors.Wrap(err, 0)
+		case value := <-valueCh:
+			values = append(values, value)
+			if len(values) == len(awaitables) {
+				return values, nil
 			}
 		}
 	}
 }
 
-// AnyInt16Slice will wait for the first channel to emit a single result
-// and return that, ignoring all other channels.
-func AnyInt16Slice(awaitables ...<-chan []int16) []int16 {
+// FastAllInt16sOrError does the same as AllInt16sOrError but does not
+// wait for all other tasks to stop. It does tell them to stop it just doesn't
+// wait for them to stop.
+func FastAllInt16sOrError(awaitables ...*task.Int16Task) ([]int16, error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.AllAsync(stop.ToStopables(v...)...)
+
+	errCh := make(chan error, 1)
+	valueCh := make(chan int16, 1)
+
+	for _, awaitable := range awaitables {
+		go func() {
+			v, err := awaitable.Result()
+			if err != nil {
+				errCh <- errors.Wrap(err, 0)
+				return
+			}
+			valueCh <- v
+		}()
+	}
+
+	values := []int16{}
 	for {
-		for _, awaitable := range awaitables {
-			select {
-			default:
-			case awaited := <-awaitable:
-				return awaited
+		select {
+		case err := <-errCh:
+			return nil, errors.Wrap(err, 0)
+		case value := <-valueCh:
+			values = append(values, value)
+			if len(values) == len(awaitables) {
+				return values, nil
 			}
 		}
 	}
 }
 
-// AnyInt16Async is an asynchronous version of AnyInt16.
-func AnyInt16Async(awaitables ...<-chan int16) <-chan int16 {
-	resolver := make(chan int16, 1)
-	go func() {
-		resolver <- AnyInt16(awaitables...)
-	}()
-	return resolver
+// AllInt16SlicesOrError will wait for every given task to emit a result or
+// return as soon as an error is encountered, canceling all other tasks.
+func AllInt16SlicesOrError(awaitables ...*task.Int16SliceTask) ([][]int16, error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.All(stop.ToStopables(v...)...)
+
+	errCh := make(chan error, 1)
+	valueCh := make(chan []int16, 1)
+
+	for _, awaitable := range awaitables {
+		go func() {
+			v, err := awaitable.Result()
+			if err != nil {
+				errCh <- errors.Wrap(err, 0)
+				return
+			}
+			valueCh <- v
+		}()
+	}
+
+	values := [][]int16{}
+	for {
+		select {
+		case err := <-errCh:
+			return nil, errors.Wrap(err, 0)
+		case value := <-valueCh:
+			values = append(values, value)
+			if len(values) == len(awaitables) {
+				return values, nil
+			}
+		}
+	}
 }
 
-// AnyInt16SliceAsync is an asynchronous version of AnyInt16.
-func AnyInt16SliceAsync(awaitables ...<-chan []int16) <-chan []int16 {
-	resolver := make(chan []int16, 1)
-	go func() {
-		resolver <- AnyInt16Slice(awaitables...)
-	}()
-	return resolver
+// FastAllInt16SlicesOrError does the same as AllInt16SlicesOrError but
+// does not wait for all other tasks to stop. It does tell them to stop it just
+// doesn't wait for them to stop.
+func FastAllInt16SlicesOrError(awaitables ...*task.Int16SliceTask) ([][]int16, error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.AllAsync(stop.ToStopables(v...)...)
+
+	errCh := make(chan error, 1)
+	valueCh := make(chan []int16, 1)
+
+	for _, awaitable := range awaitables {
+		go func() {
+			v, err := awaitable.Result()
+			if err != nil {
+				errCh <- errors.Wrap(err, 0)
+				return
+			}
+			valueCh <- v
+		}()
+	}
+
+	values := [][]int16{}
+	for {
+		select {
+		case err := <-errCh:
+			return nil, errors.Wrap(err, 0)
+		case value := <-valueCh:
+			values = append(values, value)
+			if len(values) == len(awaitables) {
+				return values, nil
+			}
+		}
+	}
 }
 
-// AllInt32s will wait for every given channel to emit a single result.
-// The results will be returned in a slice ordered the same as the input channels.
-func AllInt32s(awaitables ...<-chan int32) []int32 {
+// AllInt32s will wait for every given task to emit a result.
+// The results (& errors) will be returned in a slice ordered the
+// same as the input.
+func AllInt32s(awaitables ...*task.Int32Task) ([]int32, error) {
 	awaited := []int32{}
+	awaitedErrors := []error{}
+
 	for _, awaitable := range awaitables {
-		awaited = append(awaited, <-awaitable)
+		v, e := awaitable.Result()
+		awaited = append(awaited, v)
+		awaitedErrors = append(awaitedErrors, e)
 	}
-	return awaited
+
+	if len(awaitedErrors) > 0 {
+		return nil, errors.New(&ErrTaskFailed{
+			Errors: awaitedErrors,
+		})
+	}
+
+	return awaited, nil
 }
 
-// AllInt32Slices will wait for every given channel to emit a single result.
-// The results will be returned in a slice ordered the same as the input channels.
-func AllInt32Slices(awaitables ...<-chan []int32) [][]int32 {
+// AllInt32Slices will wait for every given task to emit a result.
+// The results (& errors) will be returned in a slice ordered the
+// same as the input.
+func AllInt32Slices(awaitables ...*task.Int32SliceTask) ([][]int32, error) {
 	awaited := [][]int32{}
+	awaitedErrors := []error{}
+
 	for _, awaitable := range awaitables {
-		awaited = append(awaited, <-awaitable)
+		v, e := awaitable.Result()
+		awaited = append(awaited, v)
+		awaitedErrors = append(awaitedErrors, e)
 	}
-	return awaited
+
+	if len(awaitedErrors) > 0 {
+		return nil, errors.New(&ErrTaskFailed{
+			Errors: awaitedErrors,
+		})
+	}
+
+	return awaited, nil
 }
 
-// AllInt32sAsync is an asynchronous version of AllInt32s
-func AllInt32sAsync(awaitables ...<-chan int32) <-chan []int32 {
-	resolver := make(chan []int32, 1)
-	go func() {
-		resolver <- AllInt32s(awaitables...)
-	}()
-	return resolver
+// AnyInt32 will wait for the first task to emit a result (or an error)
+// and return that, canceling all other tasks.
+func AnyInt32(awaitables ...*task.Int32Task) (value int32, err error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.All(stop.ToStopables(v...)...)
+
+	type doneOnce struct {
+		o  sync.Once
+		ch chan struct{}
+	}
+	done := doneOnce{
+		ch: make(chan struct{}, 1),
+	}
+	closeDone := func() {
+		done.o.Do(func() {
+			close(done.ch)
+		})
+	}
+
+	for _, awaitable := range awaitables {
+		go func() {
+			defer closeDone()
+			value, err = awaitable.Result()
+		}()
+	}
+
+	<-done.ch
+	return value, err
 }
 
-// AllInt32SlicesAsync is an asynchronous version of AllInt32Slices
-func AllInt32SlicesAsync(awaitables ...<-chan []int32) <-chan [][]int32 {
-	resolver := make(chan [][]int32, 1)
-	go func() {
-		resolver <- AllInt32Slices(awaitables...)
-	}()
-	return resolver
+// FastAnyInt32 does the same as AnyInt32 but does not wait for all
+// other tasks to stop. It does tell them to stop it just doesn't wait for
+// them to stop.
+func FastAnyInt32(awaitables ...*task.Int32Task) (value int32, err error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.AllAsync(stop.ToStopables(v...)...)
+
+	type doneOnce struct {
+		o  sync.Once
+		ch chan struct{}
+	}
+	done := doneOnce{
+		ch: make(chan struct{}, 1),
+	}
+	closeDone := func() {
+		done.o.Do(func() {
+			close(done.ch)
+		})
+	}
+
+	for _, awaitable := range awaitables {
+		go func() {
+			defer closeDone()
+			value, err = awaitable.Result()
+		}()
+	}
+
+	<-done.ch
+	return value, err
 }
 
-// AnyInt32 will wait for the first channel to emit a single result
-// and return that, ignoring all other channels.
-func AnyInt32(awaitables ...<-chan int32) int32 {
+// AnyInt32Slice will wait for the first task to emit a result (or an error)
+// and return that, canceling all other tasks.
+func AnyInt32Slice(awaitables ...*task.Int32SliceTask) (value []int32, err error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.All(stop.ToStopables(v...)...)
+
+	type doneOnce struct {
+		o  sync.Once
+		ch chan struct{}
+	}
+	done := doneOnce{
+		ch: make(chan struct{}, 1),
+	}
+	closeDone := func() {
+		done.o.Do(func() {
+			close(done.ch)
+		})
+	}
+
+	for _, awaitable := range awaitables {
+		go func() {
+			defer closeDone()
+			value, err = awaitable.Result()
+		}()
+	}
+
+	<-done.ch
+	return value, err
+}
+
+// FastAnyInt32Slice does the same as AnyInt32Slice but does not wait
+// for all other tasks to stop. It does tell them to stop it just doesn't wait
+// for them to stop.
+func FastAnyInt32Slice(awaitables ...*task.Int32SliceTask) (value []int32, err error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.AllAsync(stop.ToStopables(v...)...)
+
+	type doneOnce struct {
+		o  sync.Once
+		ch chan struct{}
+	}
+	done := doneOnce{
+		ch: make(chan struct{}, 1),
+	}
+	closeDone := func() {
+		done.o.Do(func() {
+			close(done.ch)
+		})
+	}
+
+	for _, awaitable := range awaitables {
+		go func() {
+			defer closeDone()
+			value, err = awaitable.Result()
+		}()
+	}
+
+	<-done.ch
+	return value, err
+}
+
+// AllInt32sOrError will wait for every given task to emit a result or
+// return as soon as an error is encountered, canceling all other tasks.
+func AllInt32sOrError(awaitables ...*task.Int32Task) ([]int32, error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.All(stop.ToStopables(v...)...)
+
+	errCh := make(chan error, 1)
+	valueCh := make(chan int32, 1)
+
+	for _, awaitable := range awaitables {
+		go func() {
+			v, err := awaitable.Result()
+			if err != nil {
+				errCh <- errors.Wrap(err, 0)
+				return
+			}
+			valueCh <- v
+		}()
+	}
+
+	values := []int32{}
 	for {
-		for _, awaitable := range awaitables {
-			select {
-			default:
-			case awaited := <-awaitable:
-				return awaited
+		select {
+		case err := <-errCh:
+			return nil, errors.Wrap(err, 0)
+		case value := <-valueCh:
+			values = append(values, value)
+			if len(values) == len(awaitables) {
+				return values, nil
 			}
 		}
 	}
 }
 
-// AnyInt32Slice will wait for the first channel to emit a single result
-// and return that, ignoring all other channels.
-func AnyInt32Slice(awaitables ...<-chan []int32) []int32 {
+// FastAllInt32sOrError does the same as AllInt32sOrError but does not
+// wait for all other tasks to stop. It does tell them to stop it just doesn't
+// wait for them to stop.
+func FastAllInt32sOrError(awaitables ...*task.Int32Task) ([]int32, error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.AllAsync(stop.ToStopables(v...)...)
+
+	errCh := make(chan error, 1)
+	valueCh := make(chan int32, 1)
+
+	for _, awaitable := range awaitables {
+		go func() {
+			v, err := awaitable.Result()
+			if err != nil {
+				errCh <- errors.Wrap(err, 0)
+				return
+			}
+			valueCh <- v
+		}()
+	}
+
+	values := []int32{}
 	for {
-		for _, awaitable := range awaitables {
-			select {
-			default:
-			case awaited := <-awaitable:
-				return awaited
+		select {
+		case err := <-errCh:
+			return nil, errors.Wrap(err, 0)
+		case value := <-valueCh:
+			values = append(values, value)
+			if len(values) == len(awaitables) {
+				return values, nil
 			}
 		}
 	}
 }
 
-// AnyInt32Async is an asynchronous version of AnyInt32.
-func AnyInt32Async(awaitables ...<-chan int32) <-chan int32 {
-	resolver := make(chan int32, 1)
-	go func() {
-		resolver <- AnyInt32(awaitables...)
-	}()
-	return resolver
+// AllInt32SlicesOrError will wait for every given task to emit a result or
+// return as soon as an error is encountered, canceling all other tasks.
+func AllInt32SlicesOrError(awaitables ...*task.Int32SliceTask) ([][]int32, error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.All(stop.ToStopables(v...)...)
+
+	errCh := make(chan error, 1)
+	valueCh := make(chan []int32, 1)
+
+	for _, awaitable := range awaitables {
+		go func() {
+			v, err := awaitable.Result()
+			if err != nil {
+				errCh <- errors.Wrap(err, 0)
+				return
+			}
+			valueCh <- v
+		}()
+	}
+
+	values := [][]int32{}
+	for {
+		select {
+		case err := <-errCh:
+			return nil, errors.Wrap(err, 0)
+		case value := <-valueCh:
+			values = append(values, value)
+			if len(values) == len(awaitables) {
+				return values, nil
+			}
+		}
+	}
 }
 
-// AnyInt32SliceAsync is an asynchronous version of AnyInt32.
-func AnyInt32SliceAsync(awaitables ...<-chan []int32) <-chan []int32 {
-	resolver := make(chan []int32, 1)
-	go func() {
-		resolver <- AnyInt32Slice(awaitables...)
-	}()
-	return resolver
+// FastAllInt32SlicesOrError does the same as AllInt32SlicesOrError but
+// does not wait for all other tasks to stop. It does tell them to stop it just
+// doesn't wait for them to stop.
+func FastAllInt32SlicesOrError(awaitables ...*task.Int32SliceTask) ([][]int32, error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.AllAsync(stop.ToStopables(v...)...)
+
+	errCh := make(chan error, 1)
+	valueCh := make(chan []int32, 1)
+
+	for _, awaitable := range awaitables {
+		go func() {
+			v, err := awaitable.Result()
+			if err != nil {
+				errCh <- errors.Wrap(err, 0)
+				return
+			}
+			valueCh <- v
+		}()
+	}
+
+	values := [][]int32{}
+	for {
+		select {
+		case err := <-errCh:
+			return nil, errors.Wrap(err, 0)
+		case value := <-valueCh:
+			values = append(values, value)
+			if len(values) == len(awaitables) {
+				return values, nil
+			}
+		}
+	}
 }
 
-// AllInt64s will wait for every given channel to emit a single result.
-// The results will be returned in a slice ordered the same as the input channels.
-func AllInt64s(awaitables ...<-chan int64) []int64 {
+// AllInt64s will wait for every given task to emit a result.
+// The results (& errors) will be returned in a slice ordered the
+// same as the input.
+func AllInt64s(awaitables ...*task.Int64Task) ([]int64, error) {
 	awaited := []int64{}
+	awaitedErrors := []error{}
+
 	for _, awaitable := range awaitables {
-		awaited = append(awaited, <-awaitable)
+		v, e := awaitable.Result()
+		awaited = append(awaited, v)
+		awaitedErrors = append(awaitedErrors, e)
 	}
-	return awaited
+
+	if len(awaitedErrors) > 0 {
+		return nil, errors.New(&ErrTaskFailed{
+			Errors: awaitedErrors,
+		})
+	}
+
+	return awaited, nil
 }
 
-// AllInt64Slices will wait for every given channel to emit a single result.
-// The results will be returned in a slice ordered the same as the input channels.
-func AllInt64Slices(awaitables ...<-chan []int64) [][]int64 {
+// AllInt64Slices will wait for every given task to emit a result.
+// The results (& errors) will be returned in a slice ordered the
+// same as the input.
+func AllInt64Slices(awaitables ...*task.Int64SliceTask) ([][]int64, error) {
 	awaited := [][]int64{}
+	awaitedErrors := []error{}
+
 	for _, awaitable := range awaitables {
-		awaited = append(awaited, <-awaitable)
+		v, e := awaitable.Result()
+		awaited = append(awaited, v)
+		awaitedErrors = append(awaitedErrors, e)
 	}
-	return awaited
+
+	if len(awaitedErrors) > 0 {
+		return nil, errors.New(&ErrTaskFailed{
+			Errors: awaitedErrors,
+		})
+	}
+
+	return awaited, nil
 }
 
-// AllInt64sAsync is an asynchronous version of AllInt64s
-func AllInt64sAsync(awaitables ...<-chan int64) <-chan []int64 {
-	resolver := make(chan []int64, 1)
-	go func() {
-		resolver <- AllInt64s(awaitables...)
-	}()
-	return resolver
+// AnyInt64 will wait for the first task to emit a result (or an error)
+// and return that, canceling all other tasks.
+func AnyInt64(awaitables ...*task.Int64Task) (value int64, err error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.All(stop.ToStopables(v...)...)
+
+	type doneOnce struct {
+		o  sync.Once
+		ch chan struct{}
+	}
+	done := doneOnce{
+		ch: make(chan struct{}, 1),
+	}
+	closeDone := func() {
+		done.o.Do(func() {
+			close(done.ch)
+		})
+	}
+
+	for _, awaitable := range awaitables {
+		go func() {
+			defer closeDone()
+			value, err = awaitable.Result()
+		}()
+	}
+
+	<-done.ch
+	return value, err
 }
 
-// AllInt64SlicesAsync is an asynchronous version of AllInt64Slices
-func AllInt64SlicesAsync(awaitables ...<-chan []int64) <-chan [][]int64 {
-	resolver := make(chan [][]int64, 1)
-	go func() {
-		resolver <- AllInt64Slices(awaitables...)
-	}()
-	return resolver
+// FastAnyInt64 does the same as AnyInt64 but does not wait for all
+// other tasks to stop. It does tell them to stop it just doesn't wait for
+// them to stop.
+func FastAnyInt64(awaitables ...*task.Int64Task) (value int64, err error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.AllAsync(stop.ToStopables(v...)...)
+
+	type doneOnce struct {
+		o  sync.Once
+		ch chan struct{}
+	}
+	done := doneOnce{
+		ch: make(chan struct{}, 1),
+	}
+	closeDone := func() {
+		done.o.Do(func() {
+			close(done.ch)
+		})
+	}
+
+	for _, awaitable := range awaitables {
+		go func() {
+			defer closeDone()
+			value, err = awaitable.Result()
+		}()
+	}
+
+	<-done.ch
+	return value, err
 }
 
-// AnyInt64 will wait for the first channel to emit a single result
-// and return that, ignoring all other channels.
-func AnyInt64(awaitables ...<-chan int64) int64 {
+// AnyInt64Slice will wait for the first task to emit a result (or an error)
+// and return that, canceling all other tasks.
+func AnyInt64Slice(awaitables ...*task.Int64SliceTask) (value []int64, err error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.All(stop.ToStopables(v...)...)
+
+	type doneOnce struct {
+		o  sync.Once
+		ch chan struct{}
+	}
+	done := doneOnce{
+		ch: make(chan struct{}, 1),
+	}
+	closeDone := func() {
+		done.o.Do(func() {
+			close(done.ch)
+		})
+	}
+
+	for _, awaitable := range awaitables {
+		go func() {
+			defer closeDone()
+			value, err = awaitable.Result()
+		}()
+	}
+
+	<-done.ch
+	return value, err
+}
+
+// FastAnyInt64Slice does the same as AnyInt64Slice but does not wait
+// for all other tasks to stop. It does tell them to stop it just doesn't wait
+// for them to stop.
+func FastAnyInt64Slice(awaitables ...*task.Int64SliceTask) (value []int64, err error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.AllAsync(stop.ToStopables(v...)...)
+
+	type doneOnce struct {
+		o  sync.Once
+		ch chan struct{}
+	}
+	done := doneOnce{
+		ch: make(chan struct{}, 1),
+	}
+	closeDone := func() {
+		done.o.Do(func() {
+			close(done.ch)
+		})
+	}
+
+	for _, awaitable := range awaitables {
+		go func() {
+			defer closeDone()
+			value, err = awaitable.Result()
+		}()
+	}
+
+	<-done.ch
+	return value, err
+}
+
+// AllInt64sOrError will wait for every given task to emit a result or
+// return as soon as an error is encountered, canceling all other tasks.
+func AllInt64sOrError(awaitables ...*task.Int64Task) ([]int64, error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.All(stop.ToStopables(v...)...)
+
+	errCh := make(chan error, 1)
+	valueCh := make(chan int64, 1)
+
+	for _, awaitable := range awaitables {
+		go func() {
+			v, err := awaitable.Result()
+			if err != nil {
+				errCh <- errors.Wrap(err, 0)
+				return
+			}
+			valueCh <- v
+		}()
+	}
+
+	values := []int64{}
 	for {
-		for _, awaitable := range awaitables {
-			select {
-			default:
-			case awaited := <-awaitable:
-				return awaited
+		select {
+		case err := <-errCh:
+			return nil, errors.Wrap(err, 0)
+		case value := <-valueCh:
+			values = append(values, value)
+			if len(values) == len(awaitables) {
+				return values, nil
 			}
 		}
 	}
 }
 
-// AnyInt64Slice will wait for the first channel to emit a single result
-// and return that, ignoring all other channels.
-func AnyInt64Slice(awaitables ...<-chan []int64) []int64 {
+// FastAllInt64sOrError does the same as AllInt64sOrError but does not
+// wait for all other tasks to stop. It does tell them to stop it just doesn't
+// wait for them to stop.
+func FastAllInt64sOrError(awaitables ...*task.Int64Task) ([]int64, error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.AllAsync(stop.ToStopables(v...)...)
+
+	errCh := make(chan error, 1)
+	valueCh := make(chan int64, 1)
+
+	for _, awaitable := range awaitables {
+		go func() {
+			v, err := awaitable.Result()
+			if err != nil {
+				errCh <- errors.Wrap(err, 0)
+				return
+			}
+			valueCh <- v
+		}()
+	}
+
+	values := []int64{}
 	for {
-		for _, awaitable := range awaitables {
-			select {
-			default:
-			case awaited := <-awaitable:
-				return awaited
+		select {
+		case err := <-errCh:
+			return nil, errors.Wrap(err, 0)
+		case value := <-valueCh:
+			values = append(values, value)
+			if len(values) == len(awaitables) {
+				return values, nil
 			}
 		}
 	}
 }
 
-// AnyInt64Async is an asynchronous version of AnyInt64.
-func AnyInt64Async(awaitables ...<-chan int64) <-chan int64 {
-	resolver := make(chan int64, 1)
-	go func() {
-		resolver <- AnyInt64(awaitables...)
-	}()
-	return resolver
+// AllInt64SlicesOrError will wait for every given task to emit a result or
+// return as soon as an error is encountered, canceling all other tasks.
+func AllInt64SlicesOrError(awaitables ...*task.Int64SliceTask) ([][]int64, error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.All(stop.ToStopables(v...)...)
+
+	errCh := make(chan error, 1)
+	valueCh := make(chan []int64, 1)
+
+	for _, awaitable := range awaitables {
+		go func() {
+			v, err := awaitable.Result()
+			if err != nil {
+				errCh <- errors.Wrap(err, 0)
+				return
+			}
+			valueCh <- v
+		}()
+	}
+
+	values := [][]int64{}
+	for {
+		select {
+		case err := <-errCh:
+			return nil, errors.Wrap(err, 0)
+		case value := <-valueCh:
+			values = append(values, value)
+			if len(values) == len(awaitables) {
+				return values, nil
+			}
+		}
+	}
 }
 
-// AnyInt64SliceAsync is an asynchronous version of AnyInt64.
-func AnyInt64SliceAsync(awaitables ...<-chan []int64) <-chan []int64 {
-	resolver := make(chan []int64, 1)
-	go func() {
-		resolver <- AnyInt64Slice(awaitables...)
-	}()
-	return resolver
+// FastAllInt64SlicesOrError does the same as AllInt64SlicesOrError but
+// does not wait for all other tasks to stop. It does tell them to stop it just
+// doesn't wait for them to stop.
+func FastAllInt64SlicesOrError(awaitables ...*task.Int64SliceTask) ([][]int64, error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.AllAsync(stop.ToStopables(v...)...)
+
+	errCh := make(chan error, 1)
+	valueCh := make(chan []int64, 1)
+
+	for _, awaitable := range awaitables {
+		go func() {
+			v, err := awaitable.Result()
+			if err != nil {
+				errCh <- errors.Wrap(err, 0)
+				return
+			}
+			valueCh <- v
+		}()
+	}
+
+	values := [][]int64{}
+	for {
+		select {
+		case err := <-errCh:
+			return nil, errors.Wrap(err, 0)
+		case value := <-valueCh:
+			values = append(values, value)
+			if len(values) == len(awaitables) {
+				return values, nil
+			}
+		}
+	}
 }
 
-// AllInt8s will wait for every given channel to emit a single result.
-// The results will be returned in a slice ordered the same as the input channels.
-func AllInt8s(awaitables ...<-chan int8) []int8 {
+// AllInt8s will wait for every given task to emit a result.
+// The results (& errors) will be returned in a slice ordered the
+// same as the input.
+func AllInt8s(awaitables ...*task.Int8Task) ([]int8, error) {
 	awaited := []int8{}
+	awaitedErrors := []error{}
+
 	for _, awaitable := range awaitables {
-		awaited = append(awaited, <-awaitable)
+		v, e := awaitable.Result()
+		awaited = append(awaited, v)
+		awaitedErrors = append(awaitedErrors, e)
 	}
-	return awaited
+
+	if len(awaitedErrors) > 0 {
+		return nil, errors.New(&ErrTaskFailed{
+			Errors: awaitedErrors,
+		})
+	}
+
+	return awaited, nil
 }
 
-// AllInt8Slices will wait for every given channel to emit a single result.
-// The results will be returned in a slice ordered the same as the input channels.
-func AllInt8Slices(awaitables ...<-chan []int8) [][]int8 {
+// AllInt8Slices will wait for every given task to emit a result.
+// The results (& errors) will be returned in a slice ordered the
+// same as the input.
+func AllInt8Slices(awaitables ...*task.Int8SliceTask) ([][]int8, error) {
 	awaited := [][]int8{}
+	awaitedErrors := []error{}
+
 	for _, awaitable := range awaitables {
-		awaited = append(awaited, <-awaitable)
+		v, e := awaitable.Result()
+		awaited = append(awaited, v)
+		awaitedErrors = append(awaitedErrors, e)
 	}
-	return awaited
+
+	if len(awaitedErrors) > 0 {
+		return nil, errors.New(&ErrTaskFailed{
+			Errors: awaitedErrors,
+		})
+	}
+
+	return awaited, nil
 }
 
-// AllInt8sAsync is an asynchronous version of AllInt8s
-func AllInt8sAsync(awaitables ...<-chan int8) <-chan []int8 {
-	resolver := make(chan []int8, 1)
-	go func() {
-		resolver <- AllInt8s(awaitables...)
-	}()
-	return resolver
+// AnyInt8 will wait for the first task to emit a result (or an error)
+// and return that, canceling all other tasks.
+func AnyInt8(awaitables ...*task.Int8Task) (value int8, err error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.All(stop.ToStopables(v...)...)
+
+	type doneOnce struct {
+		o  sync.Once
+		ch chan struct{}
+	}
+	done := doneOnce{
+		ch: make(chan struct{}, 1),
+	}
+	closeDone := func() {
+		done.o.Do(func() {
+			close(done.ch)
+		})
+	}
+
+	for _, awaitable := range awaitables {
+		go func() {
+			defer closeDone()
+			value, err = awaitable.Result()
+		}()
+	}
+
+	<-done.ch
+	return value, err
 }
 
-// AllInt8SlicesAsync is an asynchronous version of AllInt8Slices
-func AllInt8SlicesAsync(awaitables ...<-chan []int8) <-chan [][]int8 {
-	resolver := make(chan [][]int8, 1)
-	go func() {
-		resolver <- AllInt8Slices(awaitables...)
-	}()
-	return resolver
+// FastAnyInt8 does the same as AnyInt8 but does not wait for all
+// other tasks to stop. It does tell them to stop it just doesn't wait for
+// them to stop.
+func FastAnyInt8(awaitables ...*task.Int8Task) (value int8, err error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.AllAsync(stop.ToStopables(v...)...)
+
+	type doneOnce struct {
+		o  sync.Once
+		ch chan struct{}
+	}
+	done := doneOnce{
+		ch: make(chan struct{}, 1),
+	}
+	closeDone := func() {
+		done.o.Do(func() {
+			close(done.ch)
+		})
+	}
+
+	for _, awaitable := range awaitables {
+		go func() {
+			defer closeDone()
+			value, err = awaitable.Result()
+		}()
+	}
+
+	<-done.ch
+	return value, err
 }
 
-// AnyInt8 will wait for the first channel to emit a single result
-// and return that, ignoring all other channels.
-func AnyInt8(awaitables ...<-chan int8) int8 {
+// AnyInt8Slice will wait for the first task to emit a result (or an error)
+// and return that, canceling all other tasks.
+func AnyInt8Slice(awaitables ...*task.Int8SliceTask) (value []int8, err error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.All(stop.ToStopables(v...)...)
+
+	type doneOnce struct {
+		o  sync.Once
+		ch chan struct{}
+	}
+	done := doneOnce{
+		ch: make(chan struct{}, 1),
+	}
+	closeDone := func() {
+		done.o.Do(func() {
+			close(done.ch)
+		})
+	}
+
+	for _, awaitable := range awaitables {
+		go func() {
+			defer closeDone()
+			value, err = awaitable.Result()
+		}()
+	}
+
+	<-done.ch
+	return value, err
+}
+
+// FastAnyInt8Slice does the same as AnyInt8Slice but does not wait
+// for all other tasks to stop. It does tell them to stop it just doesn't wait
+// for them to stop.
+func FastAnyInt8Slice(awaitables ...*task.Int8SliceTask) (value []int8, err error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.AllAsync(stop.ToStopables(v...)...)
+
+	type doneOnce struct {
+		o  sync.Once
+		ch chan struct{}
+	}
+	done := doneOnce{
+		ch: make(chan struct{}, 1),
+	}
+	closeDone := func() {
+		done.o.Do(func() {
+			close(done.ch)
+		})
+	}
+
+	for _, awaitable := range awaitables {
+		go func() {
+			defer closeDone()
+			value, err = awaitable.Result()
+		}()
+	}
+
+	<-done.ch
+	return value, err
+}
+
+// AllInt8sOrError will wait for every given task to emit a result or
+// return as soon as an error is encountered, canceling all other tasks.
+func AllInt8sOrError(awaitables ...*task.Int8Task) ([]int8, error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.All(stop.ToStopables(v...)...)
+
+	errCh := make(chan error, 1)
+	valueCh := make(chan int8, 1)
+
+	for _, awaitable := range awaitables {
+		go func() {
+			v, err := awaitable.Result()
+			if err != nil {
+				errCh <- errors.Wrap(err, 0)
+				return
+			}
+			valueCh <- v
+		}()
+	}
+
+	values := []int8{}
 	for {
-		for _, awaitable := range awaitables {
-			select {
-			default:
-			case awaited := <-awaitable:
-				return awaited
+		select {
+		case err := <-errCh:
+			return nil, errors.Wrap(err, 0)
+		case value := <-valueCh:
+			values = append(values, value)
+			if len(values) == len(awaitables) {
+				return values, nil
 			}
 		}
 	}
 }
 
-// AnyInt8Slice will wait for the first channel to emit a single result
-// and return that, ignoring all other channels.
-func AnyInt8Slice(awaitables ...<-chan []int8) []int8 {
+// FastAllInt8sOrError does the same as AllInt8sOrError but does not
+// wait for all other tasks to stop. It does tell them to stop it just doesn't
+// wait for them to stop.
+func FastAllInt8sOrError(awaitables ...*task.Int8Task) ([]int8, error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.AllAsync(stop.ToStopables(v...)...)
+
+	errCh := make(chan error, 1)
+	valueCh := make(chan int8, 1)
+
+	for _, awaitable := range awaitables {
+		go func() {
+			v, err := awaitable.Result()
+			if err != nil {
+				errCh <- errors.Wrap(err, 0)
+				return
+			}
+			valueCh <- v
+		}()
+	}
+
+	values := []int8{}
 	for {
-		for _, awaitable := range awaitables {
-			select {
-			default:
-			case awaited := <-awaitable:
-				return awaited
+		select {
+		case err := <-errCh:
+			return nil, errors.Wrap(err, 0)
+		case value := <-valueCh:
+			values = append(values, value)
+			if len(values) == len(awaitables) {
+				return values, nil
 			}
 		}
 	}
 }
 
-// AnyInt8Async is an asynchronous version of AnyInt8.
-func AnyInt8Async(awaitables ...<-chan int8) <-chan int8 {
-	resolver := make(chan int8, 1)
-	go func() {
-		resolver <- AnyInt8(awaitables...)
-	}()
-	return resolver
+// AllInt8SlicesOrError will wait for every given task to emit a result or
+// return as soon as an error is encountered, canceling all other tasks.
+func AllInt8SlicesOrError(awaitables ...*task.Int8SliceTask) ([][]int8, error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.All(stop.ToStopables(v...)...)
+
+	errCh := make(chan error, 1)
+	valueCh := make(chan []int8, 1)
+
+	for _, awaitable := range awaitables {
+		go func() {
+			v, err := awaitable.Result()
+			if err != nil {
+				errCh <- errors.Wrap(err, 0)
+				return
+			}
+			valueCh <- v
+		}()
+	}
+
+	values := [][]int8{}
+	for {
+		select {
+		case err := <-errCh:
+			return nil, errors.Wrap(err, 0)
+		case value := <-valueCh:
+			values = append(values, value)
+			if len(values) == len(awaitables) {
+				return values, nil
+			}
+		}
+	}
 }
 
-// AnyInt8SliceAsync is an asynchronous version of AnyInt8.
-func AnyInt8SliceAsync(awaitables ...<-chan []int8) <-chan []int8 {
-	resolver := make(chan []int8, 1)
-	go func() {
-		resolver <- AnyInt8Slice(awaitables...)
-	}()
-	return resolver
+// FastAllInt8SlicesOrError does the same as AllInt8SlicesOrError but
+// does not wait for all other tasks to stop. It does tell them to stop it just
+// doesn't wait for them to stop.
+func FastAllInt8SlicesOrError(awaitables ...*task.Int8SliceTask) ([][]int8, error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.AllAsync(stop.ToStopables(v...)...)
+
+	errCh := make(chan error, 1)
+	valueCh := make(chan []int8, 1)
+
+	for _, awaitable := range awaitables {
+		go func() {
+			v, err := awaitable.Result()
+			if err != nil {
+				errCh <- errors.Wrap(err, 0)
+				return
+			}
+			valueCh <- v
+		}()
+	}
+
+	values := [][]int8{}
+	for {
+		select {
+		case err := <-errCh:
+			return nil, errors.Wrap(err, 0)
+		case value := <-valueCh:
+			values = append(values, value)
+			if len(values) == len(awaitables) {
+				return values, nil
+			}
+		}
+	}
 }
 
-// AllRunes will wait for every given channel to emit a single result.
-// The results will be returned in a slice ordered the same as the input channels.
-func AllRunes(awaitables ...<-chan rune) []rune {
+// AllRunes will wait for every given task to emit a result.
+// The results (& errors) will be returned in a slice ordered the
+// same as the input.
+func AllRunes(awaitables ...*task.RuneTask) ([]rune, error) {
 	awaited := []rune{}
+	awaitedErrors := []error{}
+
 	for _, awaitable := range awaitables {
-		awaited = append(awaited, <-awaitable)
+		v, e := awaitable.Result()
+		awaited = append(awaited, v)
+		awaitedErrors = append(awaitedErrors, e)
 	}
-	return awaited
+
+	if len(awaitedErrors) > 0 {
+		return nil, errors.New(&ErrTaskFailed{
+			Errors: awaitedErrors,
+		})
+	}
+
+	return awaited, nil
 }
 
-// AllRuneSlices will wait for every given channel to emit a single result.
-// The results will be returned in a slice ordered the same as the input channels.
-func AllRuneSlices(awaitables ...<-chan []rune) [][]rune {
+// AllRuneSlices will wait for every given task to emit a result.
+// The results (& errors) will be returned in a slice ordered the
+// same as the input.
+func AllRuneSlices(awaitables ...*task.RuneSliceTask) ([][]rune, error) {
 	awaited := [][]rune{}
+	awaitedErrors := []error{}
+
 	for _, awaitable := range awaitables {
-		awaited = append(awaited, <-awaitable)
+		v, e := awaitable.Result()
+		awaited = append(awaited, v)
+		awaitedErrors = append(awaitedErrors, e)
 	}
-	return awaited
+
+	if len(awaitedErrors) > 0 {
+		return nil, errors.New(&ErrTaskFailed{
+			Errors: awaitedErrors,
+		})
+	}
+
+	return awaited, nil
 }
 
-// AllRunesAsync is an asynchronous version of AllRunes
-func AllRunesAsync(awaitables ...<-chan rune) <-chan []rune {
-	resolver := make(chan []rune, 1)
-	go func() {
-		resolver <- AllRunes(awaitables...)
-	}()
-	return resolver
+// AnyRune will wait for the first task to emit a result (or an error)
+// and return that, canceling all other tasks.
+func AnyRune(awaitables ...*task.RuneTask) (value rune, err error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.All(stop.ToStopables(v...)...)
+
+	type doneOnce struct {
+		o  sync.Once
+		ch chan struct{}
+	}
+	done := doneOnce{
+		ch: make(chan struct{}, 1),
+	}
+	closeDone := func() {
+		done.o.Do(func() {
+			close(done.ch)
+		})
+	}
+
+	for _, awaitable := range awaitables {
+		go func() {
+			defer closeDone()
+			value, err = awaitable.Result()
+		}()
+	}
+
+	<-done.ch
+	return value, err
 }
 
-// AllRuneSlicesAsync is an asynchronous version of AllRuneSlices
-func AllRuneSlicesAsync(awaitables ...<-chan []rune) <-chan [][]rune {
-	resolver := make(chan [][]rune, 1)
-	go func() {
-		resolver <- AllRuneSlices(awaitables...)
-	}()
-	return resolver
+// FastAnyRune does the same as AnyRune but does not wait for all
+// other tasks to stop. It does tell them to stop it just doesn't wait for
+// them to stop.
+func FastAnyRune(awaitables ...*task.RuneTask) (value rune, err error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.AllAsync(stop.ToStopables(v...)...)
+
+	type doneOnce struct {
+		o  sync.Once
+		ch chan struct{}
+	}
+	done := doneOnce{
+		ch: make(chan struct{}, 1),
+	}
+	closeDone := func() {
+		done.o.Do(func() {
+			close(done.ch)
+		})
+	}
+
+	for _, awaitable := range awaitables {
+		go func() {
+			defer closeDone()
+			value, err = awaitable.Result()
+		}()
+	}
+
+	<-done.ch
+	return value, err
 }
 
-// AnyRune will wait for the first channel to emit a single result
-// and return that, ignoring all other channels.
-func AnyRune(awaitables ...<-chan rune) rune {
+// AnyRuneSlice will wait for the first task to emit a result (or an error)
+// and return that, canceling all other tasks.
+func AnyRuneSlice(awaitables ...*task.RuneSliceTask) (value []rune, err error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.All(stop.ToStopables(v...)...)
+
+	type doneOnce struct {
+		o  sync.Once
+		ch chan struct{}
+	}
+	done := doneOnce{
+		ch: make(chan struct{}, 1),
+	}
+	closeDone := func() {
+		done.o.Do(func() {
+			close(done.ch)
+		})
+	}
+
+	for _, awaitable := range awaitables {
+		go func() {
+			defer closeDone()
+			value, err = awaitable.Result()
+		}()
+	}
+
+	<-done.ch
+	return value, err
+}
+
+// FastAnyRuneSlice does the same as AnyRuneSlice but does not wait
+// for all other tasks to stop. It does tell them to stop it just doesn't wait
+// for them to stop.
+func FastAnyRuneSlice(awaitables ...*task.RuneSliceTask) (value []rune, err error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.AllAsync(stop.ToStopables(v...)...)
+
+	type doneOnce struct {
+		o  sync.Once
+		ch chan struct{}
+	}
+	done := doneOnce{
+		ch: make(chan struct{}, 1),
+	}
+	closeDone := func() {
+		done.o.Do(func() {
+			close(done.ch)
+		})
+	}
+
+	for _, awaitable := range awaitables {
+		go func() {
+			defer closeDone()
+			value, err = awaitable.Result()
+		}()
+	}
+
+	<-done.ch
+	return value, err
+}
+
+// AllRunesOrError will wait for every given task to emit a result or
+// return as soon as an error is encountered, canceling all other tasks.
+func AllRunesOrError(awaitables ...*task.RuneTask) ([]rune, error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.All(stop.ToStopables(v...)...)
+
+	errCh := make(chan error, 1)
+	valueCh := make(chan rune, 1)
+
+	for _, awaitable := range awaitables {
+		go func() {
+			v, err := awaitable.Result()
+			if err != nil {
+				errCh <- errors.Wrap(err, 0)
+				return
+			}
+			valueCh <- v
+		}()
+	}
+
+	values := []rune{}
 	for {
-		for _, awaitable := range awaitables {
-			select {
-			default:
-			case awaited := <-awaitable:
-				return awaited
+		select {
+		case err := <-errCh:
+			return nil, errors.Wrap(err, 0)
+		case value := <-valueCh:
+			values = append(values, value)
+			if len(values) == len(awaitables) {
+				return values, nil
 			}
 		}
 	}
 }
 
-// AnyRuneSlice will wait for the first channel to emit a single result
-// and return that, ignoring all other channels.
-func AnyRuneSlice(awaitables ...<-chan []rune) []rune {
+// FastAllRunesOrError does the same as AllRunesOrError but does not
+// wait for all other tasks to stop. It does tell them to stop it just doesn't
+// wait for them to stop.
+func FastAllRunesOrError(awaitables ...*task.RuneTask) ([]rune, error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.AllAsync(stop.ToStopables(v...)...)
+
+	errCh := make(chan error, 1)
+	valueCh := make(chan rune, 1)
+
+	for _, awaitable := range awaitables {
+		go func() {
+			v, err := awaitable.Result()
+			if err != nil {
+				errCh <- errors.Wrap(err, 0)
+				return
+			}
+			valueCh <- v
+		}()
+	}
+
+	values := []rune{}
 	for {
-		for _, awaitable := range awaitables {
-			select {
-			default:
-			case awaited := <-awaitable:
-				return awaited
+		select {
+		case err := <-errCh:
+			return nil, errors.Wrap(err, 0)
+		case value := <-valueCh:
+			values = append(values, value)
+			if len(values) == len(awaitables) {
+				return values, nil
 			}
 		}
 	}
 }
 
-// AnyRuneAsync is an asynchronous version of AnyRune.
-func AnyRuneAsync(awaitables ...<-chan rune) <-chan rune {
-	resolver := make(chan rune, 1)
-	go func() {
-		resolver <- AnyRune(awaitables...)
-	}()
-	return resolver
+// AllRuneSlicesOrError will wait for every given task to emit a result or
+// return as soon as an error is encountered, canceling all other tasks.
+func AllRuneSlicesOrError(awaitables ...*task.RuneSliceTask) ([][]rune, error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.All(stop.ToStopables(v...)...)
+
+	errCh := make(chan error, 1)
+	valueCh := make(chan []rune, 1)
+
+	for _, awaitable := range awaitables {
+		go func() {
+			v, err := awaitable.Result()
+			if err != nil {
+				errCh <- errors.Wrap(err, 0)
+				return
+			}
+			valueCh <- v
+		}()
+	}
+
+	values := [][]rune{}
+	for {
+		select {
+		case err := <-errCh:
+			return nil, errors.Wrap(err, 0)
+		case value := <-valueCh:
+			values = append(values, value)
+			if len(values) == len(awaitables) {
+				return values, nil
+			}
+		}
+	}
 }
 
-// AnyRuneSliceAsync is an asynchronous version of AnyRune.
-func AnyRuneSliceAsync(awaitables ...<-chan []rune) <-chan []rune {
-	resolver := make(chan []rune, 1)
-	go func() {
-		resolver <- AnyRuneSlice(awaitables...)
-	}()
-	return resolver
+// FastAllRuneSlicesOrError does the same as AllRuneSlicesOrError but
+// does not wait for all other tasks to stop. It does tell them to stop it just
+// doesn't wait for them to stop.
+func FastAllRuneSlicesOrError(awaitables ...*task.RuneSliceTask) ([][]rune, error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.AllAsync(stop.ToStopables(v...)...)
+
+	errCh := make(chan error, 1)
+	valueCh := make(chan []rune, 1)
+
+	for _, awaitable := range awaitables {
+		go func() {
+			v, err := awaitable.Result()
+			if err != nil {
+				errCh <- errors.Wrap(err, 0)
+				return
+			}
+			valueCh <- v
+		}()
+	}
+
+	values := [][]rune{}
+	for {
+		select {
+		case err := <-errCh:
+			return nil, errors.Wrap(err, 0)
+		case value := <-valueCh:
+			values = append(values, value)
+			if len(values) == len(awaitables) {
+				return values, nil
+			}
+		}
+	}
 }
 
-// AllStrings will wait for every given channel to emit a single result.
-// The results will be returned in a slice ordered the same as the input channels.
-func AllStrings(awaitables ...<-chan string) []string {
+// AllStrings will wait for every given task to emit a result.
+// The results (& errors) will be returned in a slice ordered the
+// same as the input.
+func AllStrings(awaitables ...*task.StringTask) ([]string, error) {
 	awaited := []string{}
+	awaitedErrors := []error{}
+
 	for _, awaitable := range awaitables {
-		awaited = append(awaited, <-awaitable)
+		v, e := awaitable.Result()
+		awaited = append(awaited, v)
+		awaitedErrors = append(awaitedErrors, e)
 	}
-	return awaited
+
+	if len(awaitedErrors) > 0 {
+		return nil, errors.New(&ErrTaskFailed{
+			Errors: awaitedErrors,
+		})
+	}
+
+	return awaited, nil
 }
 
-// AllStringSlices will wait for every given channel to emit a single result.
-// The results will be returned in a slice ordered the same as the input channels.
-func AllStringSlices(awaitables ...<-chan []string) [][]string {
+// AllStringSlices will wait for every given task to emit a result.
+// The results (& errors) will be returned in a slice ordered the
+// same as the input.
+func AllStringSlices(awaitables ...*task.StringSliceTask) ([][]string, error) {
 	awaited := [][]string{}
+	awaitedErrors := []error{}
+
 	for _, awaitable := range awaitables {
-		awaited = append(awaited, <-awaitable)
+		v, e := awaitable.Result()
+		awaited = append(awaited, v)
+		awaitedErrors = append(awaitedErrors, e)
 	}
-	return awaited
+
+	if len(awaitedErrors) > 0 {
+		return nil, errors.New(&ErrTaskFailed{
+			Errors: awaitedErrors,
+		})
+	}
+
+	return awaited, nil
 }
 
-// AllStringsAsync is an asynchronous version of AllStrings
-func AllStringsAsync(awaitables ...<-chan string) <-chan []string {
-	resolver := make(chan []string, 1)
-	go func() {
-		resolver <- AllStrings(awaitables...)
-	}()
-	return resolver
+// AnyString will wait for the first task to emit a result (or an error)
+// and return that, canceling all other tasks.
+func AnyString(awaitables ...*task.StringTask) (value string, err error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.All(stop.ToStopables(v...)...)
+
+	type doneOnce struct {
+		o  sync.Once
+		ch chan struct{}
+	}
+	done := doneOnce{
+		ch: make(chan struct{}, 1),
+	}
+	closeDone := func() {
+		done.o.Do(func() {
+			close(done.ch)
+		})
+	}
+
+	for _, awaitable := range awaitables {
+		go func() {
+			defer closeDone()
+			value, err = awaitable.Result()
+		}()
+	}
+
+	<-done.ch
+	return value, err
 }
 
-// AllStringSlicesAsync is an asynchronous version of AllStringSlices
-func AllStringSlicesAsync(awaitables ...<-chan []string) <-chan [][]string {
-	resolver := make(chan [][]string, 1)
-	go func() {
-		resolver <- AllStringSlices(awaitables...)
-	}()
-	return resolver
+// FastAnyString does the same as AnyString but does not wait for all
+// other tasks to stop. It does tell them to stop it just doesn't wait for
+// them to stop.
+func FastAnyString(awaitables ...*task.StringTask) (value string, err error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.AllAsync(stop.ToStopables(v...)...)
+
+	type doneOnce struct {
+		o  sync.Once
+		ch chan struct{}
+	}
+	done := doneOnce{
+		ch: make(chan struct{}, 1),
+	}
+	closeDone := func() {
+		done.o.Do(func() {
+			close(done.ch)
+		})
+	}
+
+	for _, awaitable := range awaitables {
+		go func() {
+			defer closeDone()
+			value, err = awaitable.Result()
+		}()
+	}
+
+	<-done.ch
+	return value, err
 }
 
-// AnyString will wait for the first channel to emit a single result
-// and return that, ignoring all other channels.
-func AnyString(awaitables ...<-chan string) string {
+// AnyStringSlice will wait for the first task to emit a result (or an error)
+// and return that, canceling all other tasks.
+func AnyStringSlice(awaitables ...*task.StringSliceTask) (value []string, err error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.All(stop.ToStopables(v...)...)
+
+	type doneOnce struct {
+		o  sync.Once
+		ch chan struct{}
+	}
+	done := doneOnce{
+		ch: make(chan struct{}, 1),
+	}
+	closeDone := func() {
+		done.o.Do(func() {
+			close(done.ch)
+		})
+	}
+
+	for _, awaitable := range awaitables {
+		go func() {
+			defer closeDone()
+			value, err = awaitable.Result()
+		}()
+	}
+
+	<-done.ch
+	return value, err
+}
+
+// FastAnyStringSlice does the same as AnyStringSlice but does not wait
+// for all other tasks to stop. It does tell them to stop it just doesn't wait
+// for them to stop.
+func FastAnyStringSlice(awaitables ...*task.StringSliceTask) (value []string, err error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.AllAsync(stop.ToStopables(v...)...)
+
+	type doneOnce struct {
+		o  sync.Once
+		ch chan struct{}
+	}
+	done := doneOnce{
+		ch: make(chan struct{}, 1),
+	}
+	closeDone := func() {
+		done.o.Do(func() {
+			close(done.ch)
+		})
+	}
+
+	for _, awaitable := range awaitables {
+		go func() {
+			defer closeDone()
+			value, err = awaitable.Result()
+		}()
+	}
+
+	<-done.ch
+	return value, err
+}
+
+// AllStringsOrError will wait for every given task to emit a result or
+// return as soon as an error is encountered, canceling all other tasks.
+func AllStringsOrError(awaitables ...*task.StringTask) ([]string, error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.All(stop.ToStopables(v...)...)
+
+	errCh := make(chan error, 1)
+	valueCh := make(chan string, 1)
+
+	for _, awaitable := range awaitables {
+		go func() {
+			v, err := awaitable.Result()
+			if err != nil {
+				errCh <- errors.Wrap(err, 0)
+				return
+			}
+			valueCh <- v
+		}()
+	}
+
+	values := []string{}
 	for {
-		for _, awaitable := range awaitables {
-			select {
-			default:
-			case awaited := <-awaitable:
-				return awaited
+		select {
+		case err := <-errCh:
+			return nil, errors.Wrap(err, 0)
+		case value := <-valueCh:
+			values = append(values, value)
+			if len(values) == len(awaitables) {
+				return values, nil
 			}
 		}
 	}
 }
 
-// AnyStringSlice will wait for the first channel to emit a single result
-// and return that, ignoring all other channels.
-func AnyStringSlice(awaitables ...<-chan []string) []string {
+// FastAllStringsOrError does the same as AllStringsOrError but does not
+// wait for all other tasks to stop. It does tell them to stop it just doesn't
+// wait for them to stop.
+func FastAllStringsOrError(awaitables ...*task.StringTask) ([]string, error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.AllAsync(stop.ToStopables(v...)...)
+
+	errCh := make(chan error, 1)
+	valueCh := make(chan string, 1)
+
+	for _, awaitable := range awaitables {
+		go func() {
+			v, err := awaitable.Result()
+			if err != nil {
+				errCh <- errors.Wrap(err, 0)
+				return
+			}
+			valueCh <- v
+		}()
+	}
+
+	values := []string{}
 	for {
-		for _, awaitable := range awaitables {
-			select {
-			default:
-			case awaited := <-awaitable:
-				return awaited
+		select {
+		case err := <-errCh:
+			return nil, errors.Wrap(err, 0)
+		case value := <-valueCh:
+			values = append(values, value)
+			if len(values) == len(awaitables) {
+				return values, nil
 			}
 		}
 	}
 }
 
-// AnyStringAsync is an asynchronous version of AnyString.
-func AnyStringAsync(awaitables ...<-chan string) <-chan string {
-	resolver := make(chan string, 1)
-	go func() {
-		resolver <- AnyString(awaitables...)
-	}()
-	return resolver
+// AllStringSlicesOrError will wait for every given task to emit a result or
+// return as soon as an error is encountered, canceling all other tasks.
+func AllStringSlicesOrError(awaitables ...*task.StringSliceTask) ([][]string, error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.All(stop.ToStopables(v...)...)
+
+	errCh := make(chan error, 1)
+	valueCh := make(chan []string, 1)
+
+	for _, awaitable := range awaitables {
+		go func() {
+			v, err := awaitable.Result()
+			if err != nil {
+				errCh <- errors.Wrap(err, 0)
+				return
+			}
+			valueCh <- v
+		}()
+	}
+
+	values := [][]string{}
+	for {
+		select {
+		case err := <-errCh:
+			return nil, errors.Wrap(err, 0)
+		case value := <-valueCh:
+			values = append(values, value)
+			if len(values) == len(awaitables) {
+				return values, nil
+			}
+		}
+	}
 }
 
-// AnyStringSliceAsync is an asynchronous version of AnyString.
-func AnyStringSliceAsync(awaitables ...<-chan []string) <-chan []string {
-	resolver := make(chan []string, 1)
-	go func() {
-		resolver <- AnyStringSlice(awaitables...)
-	}()
-	return resolver
+// FastAllStringSlicesOrError does the same as AllStringSlicesOrError but
+// does not wait for all other tasks to stop. It does tell them to stop it just
+// doesn't wait for them to stop.
+func FastAllStringSlicesOrError(awaitables ...*task.StringSliceTask) ([][]string, error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.AllAsync(stop.ToStopables(v...)...)
+
+	errCh := make(chan error, 1)
+	valueCh := make(chan []string, 1)
+
+	for _, awaitable := range awaitables {
+		go func() {
+			v, err := awaitable.Result()
+			if err != nil {
+				errCh <- errors.Wrap(err, 0)
+				return
+			}
+			valueCh <- v
+		}()
+	}
+
+	values := [][]string{}
+	for {
+		select {
+		case err := <-errCh:
+			return nil, errors.Wrap(err, 0)
+		case value := <-valueCh:
+			values = append(values, value)
+			if len(values) == len(awaitables) {
+				return values, nil
+			}
+		}
+	}
 }
 
-// AllUints will wait for every given channel to emit a single result.
-// The results will be returned in a slice ordered the same as the input channels.
-func AllUints(awaitables ...<-chan uint) []uint {
+// AllUints will wait for every given task to emit a result.
+// The results (& errors) will be returned in a slice ordered the
+// same as the input.
+func AllUints(awaitables ...*task.UintTask) ([]uint, error) {
 	awaited := []uint{}
+	awaitedErrors := []error{}
+
 	for _, awaitable := range awaitables {
-		awaited = append(awaited, <-awaitable)
+		v, e := awaitable.Result()
+		awaited = append(awaited, v)
+		awaitedErrors = append(awaitedErrors, e)
 	}
-	return awaited
+
+	if len(awaitedErrors) > 0 {
+		return nil, errors.New(&ErrTaskFailed{
+			Errors: awaitedErrors,
+		})
+	}
+
+	return awaited, nil
 }
 
-// AllUintSlices will wait for every given channel to emit a single result.
-// The results will be returned in a slice ordered the same as the input channels.
-func AllUintSlices(awaitables ...<-chan []uint) [][]uint {
+// AllUintSlices will wait for every given task to emit a result.
+// The results (& errors) will be returned in a slice ordered the
+// same as the input.
+func AllUintSlices(awaitables ...*task.UintSliceTask) ([][]uint, error) {
 	awaited := [][]uint{}
+	awaitedErrors := []error{}
+
 	for _, awaitable := range awaitables {
-		awaited = append(awaited, <-awaitable)
+		v, e := awaitable.Result()
+		awaited = append(awaited, v)
+		awaitedErrors = append(awaitedErrors, e)
 	}
-	return awaited
+
+	if len(awaitedErrors) > 0 {
+		return nil, errors.New(&ErrTaskFailed{
+			Errors: awaitedErrors,
+		})
+	}
+
+	return awaited, nil
 }
 
-// AllUintsAsync is an asynchronous version of AllUints
-func AllUintsAsync(awaitables ...<-chan uint) <-chan []uint {
-	resolver := make(chan []uint, 1)
-	go func() {
-		resolver <- AllUints(awaitables...)
-	}()
-	return resolver
+// AnyUint will wait for the first task to emit a result (or an error)
+// and return that, canceling all other tasks.
+func AnyUint(awaitables ...*task.UintTask) (value uint, err error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.All(stop.ToStopables(v...)...)
+
+	type doneOnce struct {
+		o  sync.Once
+		ch chan struct{}
+	}
+	done := doneOnce{
+		ch: make(chan struct{}, 1),
+	}
+	closeDone := func() {
+		done.o.Do(func() {
+			close(done.ch)
+		})
+	}
+
+	for _, awaitable := range awaitables {
+		go func() {
+			defer closeDone()
+			value, err = awaitable.Result()
+		}()
+	}
+
+	<-done.ch
+	return value, err
 }
 
-// AllUintSlicesAsync is an asynchronous version of AllUintSlices
-func AllUintSlicesAsync(awaitables ...<-chan []uint) <-chan [][]uint {
-	resolver := make(chan [][]uint, 1)
-	go func() {
-		resolver <- AllUintSlices(awaitables...)
-	}()
-	return resolver
+// FastAnyUint does the same as AnyUint but does not wait for all
+// other tasks to stop. It does tell them to stop it just doesn't wait for
+// them to stop.
+func FastAnyUint(awaitables ...*task.UintTask) (value uint, err error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.AllAsync(stop.ToStopables(v...)...)
+
+	type doneOnce struct {
+		o  sync.Once
+		ch chan struct{}
+	}
+	done := doneOnce{
+		ch: make(chan struct{}, 1),
+	}
+	closeDone := func() {
+		done.o.Do(func() {
+			close(done.ch)
+		})
+	}
+
+	for _, awaitable := range awaitables {
+		go func() {
+			defer closeDone()
+			value, err = awaitable.Result()
+		}()
+	}
+
+	<-done.ch
+	return value, err
 }
 
-// AnyUint will wait for the first channel to emit a single result
-// and return that, ignoring all other channels.
-func AnyUint(awaitables ...<-chan uint) uint {
+// AnyUintSlice will wait for the first task to emit a result (or an error)
+// and return that, canceling all other tasks.
+func AnyUintSlice(awaitables ...*task.UintSliceTask) (value []uint, err error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.All(stop.ToStopables(v...)...)
+
+	type doneOnce struct {
+		o  sync.Once
+		ch chan struct{}
+	}
+	done := doneOnce{
+		ch: make(chan struct{}, 1),
+	}
+	closeDone := func() {
+		done.o.Do(func() {
+			close(done.ch)
+		})
+	}
+
+	for _, awaitable := range awaitables {
+		go func() {
+			defer closeDone()
+			value, err = awaitable.Result()
+		}()
+	}
+
+	<-done.ch
+	return value, err
+}
+
+// FastAnyUintSlice does the same as AnyUintSlice but does not wait
+// for all other tasks to stop. It does tell them to stop it just doesn't wait
+// for them to stop.
+func FastAnyUintSlice(awaitables ...*task.UintSliceTask) (value []uint, err error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.AllAsync(stop.ToStopables(v...)...)
+
+	type doneOnce struct {
+		o  sync.Once
+		ch chan struct{}
+	}
+	done := doneOnce{
+		ch: make(chan struct{}, 1),
+	}
+	closeDone := func() {
+		done.o.Do(func() {
+			close(done.ch)
+		})
+	}
+
+	for _, awaitable := range awaitables {
+		go func() {
+			defer closeDone()
+			value, err = awaitable.Result()
+		}()
+	}
+
+	<-done.ch
+	return value, err
+}
+
+// AllUintsOrError will wait for every given task to emit a result or
+// return as soon as an error is encountered, canceling all other tasks.
+func AllUintsOrError(awaitables ...*task.UintTask) ([]uint, error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.All(stop.ToStopables(v...)...)
+
+	errCh := make(chan error, 1)
+	valueCh := make(chan uint, 1)
+
+	for _, awaitable := range awaitables {
+		go func() {
+			v, err := awaitable.Result()
+			if err != nil {
+				errCh <- errors.Wrap(err, 0)
+				return
+			}
+			valueCh <- v
+		}()
+	}
+
+	values := []uint{}
 	for {
-		for _, awaitable := range awaitables {
-			select {
-			default:
-			case awaited := <-awaitable:
-				return awaited
+		select {
+		case err := <-errCh:
+			return nil, errors.Wrap(err, 0)
+		case value := <-valueCh:
+			values = append(values, value)
+			if len(values) == len(awaitables) {
+				return values, nil
 			}
 		}
 	}
 }
 
-// AnyUintSlice will wait for the first channel to emit a single result
-// and return that, ignoring all other channels.
-func AnyUintSlice(awaitables ...<-chan []uint) []uint {
+// FastAllUintsOrError does the same as AllUintsOrError but does not
+// wait for all other tasks to stop. It does tell them to stop it just doesn't
+// wait for them to stop.
+func FastAllUintsOrError(awaitables ...*task.UintTask) ([]uint, error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.AllAsync(stop.ToStopables(v...)...)
+
+	errCh := make(chan error, 1)
+	valueCh := make(chan uint, 1)
+
+	for _, awaitable := range awaitables {
+		go func() {
+			v, err := awaitable.Result()
+			if err != nil {
+				errCh <- errors.Wrap(err, 0)
+				return
+			}
+			valueCh <- v
+		}()
+	}
+
+	values := []uint{}
 	for {
-		for _, awaitable := range awaitables {
-			select {
-			default:
-			case awaited := <-awaitable:
-				return awaited
+		select {
+		case err := <-errCh:
+			return nil, errors.Wrap(err, 0)
+		case value := <-valueCh:
+			values = append(values, value)
+			if len(values) == len(awaitables) {
+				return values, nil
 			}
 		}
 	}
 }
 
-// AnyUintAsync is an asynchronous version of AnyUint.
-func AnyUintAsync(awaitables ...<-chan uint) <-chan uint {
-	resolver := make(chan uint, 1)
-	go func() {
-		resolver <- AnyUint(awaitables...)
-	}()
-	return resolver
+// AllUintSlicesOrError will wait for every given task to emit a result or
+// return as soon as an error is encountered, canceling all other tasks.
+func AllUintSlicesOrError(awaitables ...*task.UintSliceTask) ([][]uint, error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.All(stop.ToStopables(v...)...)
+
+	errCh := make(chan error, 1)
+	valueCh := make(chan []uint, 1)
+
+	for _, awaitable := range awaitables {
+		go func() {
+			v, err := awaitable.Result()
+			if err != nil {
+				errCh <- errors.Wrap(err, 0)
+				return
+			}
+			valueCh <- v
+		}()
+	}
+
+	values := [][]uint{}
+	for {
+		select {
+		case err := <-errCh:
+			return nil, errors.Wrap(err, 0)
+		case value := <-valueCh:
+			values = append(values, value)
+			if len(values) == len(awaitables) {
+				return values, nil
+			}
+		}
+	}
 }
 
-// AnyUintSliceAsync is an asynchronous version of AnyUint.
-func AnyUintSliceAsync(awaitables ...<-chan []uint) <-chan []uint {
-	resolver := make(chan []uint, 1)
-	go func() {
-		resolver <- AnyUintSlice(awaitables...)
-	}()
-	return resolver
+// FastAllUintSlicesOrError does the same as AllUintSlicesOrError but
+// does not wait for all other tasks to stop. It does tell them to stop it just
+// doesn't wait for them to stop.
+func FastAllUintSlicesOrError(awaitables ...*task.UintSliceTask) ([][]uint, error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.AllAsync(stop.ToStopables(v...)...)
+
+	errCh := make(chan error, 1)
+	valueCh := make(chan []uint, 1)
+
+	for _, awaitable := range awaitables {
+		go func() {
+			v, err := awaitable.Result()
+			if err != nil {
+				errCh <- errors.Wrap(err, 0)
+				return
+			}
+			valueCh <- v
+		}()
+	}
+
+	values := [][]uint{}
+	for {
+		select {
+		case err := <-errCh:
+			return nil, errors.Wrap(err, 0)
+		case value := <-valueCh:
+			values = append(values, value)
+			if len(values) == len(awaitables) {
+				return values, nil
+			}
+		}
+	}
 }
 
-// AllUint16s will wait for every given channel to emit a single result.
-// The results will be returned in a slice ordered the same as the input channels.
-func AllUint16s(awaitables ...<-chan uint16) []uint16 {
+// AllUint16s will wait for every given task to emit a result.
+// The results (& errors) will be returned in a slice ordered the
+// same as the input.
+func AllUint16s(awaitables ...*task.Uint16Task) ([]uint16, error) {
 	awaited := []uint16{}
+	awaitedErrors := []error{}
+
 	for _, awaitable := range awaitables {
-		awaited = append(awaited, <-awaitable)
+		v, e := awaitable.Result()
+		awaited = append(awaited, v)
+		awaitedErrors = append(awaitedErrors, e)
 	}
-	return awaited
+
+	if len(awaitedErrors) > 0 {
+		return nil, errors.New(&ErrTaskFailed{
+			Errors: awaitedErrors,
+		})
+	}
+
+	return awaited, nil
 }
 
-// AllUint16Slices will wait for every given channel to emit a single result.
-// The results will be returned in a slice ordered the same as the input channels.
-func AllUint16Slices(awaitables ...<-chan []uint16) [][]uint16 {
+// AllUint16Slices will wait for every given task to emit a result.
+// The results (& errors) will be returned in a slice ordered the
+// same as the input.
+func AllUint16Slices(awaitables ...*task.Uint16SliceTask) ([][]uint16, error) {
 	awaited := [][]uint16{}
+	awaitedErrors := []error{}
+
 	for _, awaitable := range awaitables {
-		awaited = append(awaited, <-awaitable)
+		v, e := awaitable.Result()
+		awaited = append(awaited, v)
+		awaitedErrors = append(awaitedErrors, e)
 	}
-	return awaited
+
+	if len(awaitedErrors) > 0 {
+		return nil, errors.New(&ErrTaskFailed{
+			Errors: awaitedErrors,
+		})
+	}
+
+	return awaited, nil
 }
 
-// AllUint16sAsync is an asynchronous version of AllUint16s
-func AllUint16sAsync(awaitables ...<-chan uint16) <-chan []uint16 {
-	resolver := make(chan []uint16, 1)
-	go func() {
-		resolver <- AllUint16s(awaitables...)
-	}()
-	return resolver
+// AnyUint16 will wait for the first task to emit a result (or an error)
+// and return that, canceling all other tasks.
+func AnyUint16(awaitables ...*task.Uint16Task) (value uint16, err error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.All(stop.ToStopables(v...)...)
+
+	type doneOnce struct {
+		o  sync.Once
+		ch chan struct{}
+	}
+	done := doneOnce{
+		ch: make(chan struct{}, 1),
+	}
+	closeDone := func() {
+		done.o.Do(func() {
+			close(done.ch)
+		})
+	}
+
+	for _, awaitable := range awaitables {
+		go func() {
+			defer closeDone()
+			value, err = awaitable.Result()
+		}()
+	}
+
+	<-done.ch
+	return value, err
 }
 
-// AllUint16SlicesAsync is an asynchronous version of AllUint16Slices
-func AllUint16SlicesAsync(awaitables ...<-chan []uint16) <-chan [][]uint16 {
-	resolver := make(chan [][]uint16, 1)
-	go func() {
-		resolver <- AllUint16Slices(awaitables...)
-	}()
-	return resolver
+// FastAnyUint16 does the same as AnyUint16 but does not wait for all
+// other tasks to stop. It does tell them to stop it just doesn't wait for
+// them to stop.
+func FastAnyUint16(awaitables ...*task.Uint16Task) (value uint16, err error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.AllAsync(stop.ToStopables(v...)...)
+
+	type doneOnce struct {
+		o  sync.Once
+		ch chan struct{}
+	}
+	done := doneOnce{
+		ch: make(chan struct{}, 1),
+	}
+	closeDone := func() {
+		done.o.Do(func() {
+			close(done.ch)
+		})
+	}
+
+	for _, awaitable := range awaitables {
+		go func() {
+			defer closeDone()
+			value, err = awaitable.Result()
+		}()
+	}
+
+	<-done.ch
+	return value, err
 }
 
-// AnyUint16 will wait for the first channel to emit a single result
-// and return that, ignoring all other channels.
-func AnyUint16(awaitables ...<-chan uint16) uint16 {
+// AnyUint16Slice will wait for the first task to emit a result (or an error)
+// and return that, canceling all other tasks.
+func AnyUint16Slice(awaitables ...*task.Uint16SliceTask) (value []uint16, err error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.All(stop.ToStopables(v...)...)
+
+	type doneOnce struct {
+		o  sync.Once
+		ch chan struct{}
+	}
+	done := doneOnce{
+		ch: make(chan struct{}, 1),
+	}
+	closeDone := func() {
+		done.o.Do(func() {
+			close(done.ch)
+		})
+	}
+
+	for _, awaitable := range awaitables {
+		go func() {
+			defer closeDone()
+			value, err = awaitable.Result()
+		}()
+	}
+
+	<-done.ch
+	return value, err
+}
+
+// FastAnyUint16Slice does the same as AnyUint16Slice but does not wait
+// for all other tasks to stop. It does tell them to stop it just doesn't wait
+// for them to stop.
+func FastAnyUint16Slice(awaitables ...*task.Uint16SliceTask) (value []uint16, err error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.AllAsync(stop.ToStopables(v...)...)
+
+	type doneOnce struct {
+		o  sync.Once
+		ch chan struct{}
+	}
+	done := doneOnce{
+		ch: make(chan struct{}, 1),
+	}
+	closeDone := func() {
+		done.o.Do(func() {
+			close(done.ch)
+		})
+	}
+
+	for _, awaitable := range awaitables {
+		go func() {
+			defer closeDone()
+			value, err = awaitable.Result()
+		}()
+	}
+
+	<-done.ch
+	return value, err
+}
+
+// AllUint16sOrError will wait for every given task to emit a result or
+// return as soon as an error is encountered, canceling all other tasks.
+func AllUint16sOrError(awaitables ...*task.Uint16Task) ([]uint16, error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.All(stop.ToStopables(v...)...)
+
+	errCh := make(chan error, 1)
+	valueCh := make(chan uint16, 1)
+
+	for _, awaitable := range awaitables {
+		go func() {
+			v, err := awaitable.Result()
+			if err != nil {
+				errCh <- errors.Wrap(err, 0)
+				return
+			}
+			valueCh <- v
+		}()
+	}
+
+	values := []uint16{}
 	for {
-		for _, awaitable := range awaitables {
-			select {
-			default:
-			case awaited := <-awaitable:
-				return awaited
+		select {
+		case err := <-errCh:
+			return nil, errors.Wrap(err, 0)
+		case value := <-valueCh:
+			values = append(values, value)
+			if len(values) == len(awaitables) {
+				return values, nil
 			}
 		}
 	}
 }
 
-// AnyUint16Slice will wait for the first channel to emit a single result
-// and return that, ignoring all other channels.
-func AnyUint16Slice(awaitables ...<-chan []uint16) []uint16 {
+// FastAllUint16sOrError does the same as AllUint16sOrError but does not
+// wait for all other tasks to stop. It does tell them to stop it just doesn't
+// wait for them to stop.
+func FastAllUint16sOrError(awaitables ...*task.Uint16Task) ([]uint16, error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.AllAsync(stop.ToStopables(v...)...)
+
+	errCh := make(chan error, 1)
+	valueCh := make(chan uint16, 1)
+
+	for _, awaitable := range awaitables {
+		go func() {
+			v, err := awaitable.Result()
+			if err != nil {
+				errCh <- errors.Wrap(err, 0)
+				return
+			}
+			valueCh <- v
+		}()
+	}
+
+	values := []uint16{}
 	for {
-		for _, awaitable := range awaitables {
-			select {
-			default:
-			case awaited := <-awaitable:
-				return awaited
+		select {
+		case err := <-errCh:
+			return nil, errors.Wrap(err, 0)
+		case value := <-valueCh:
+			values = append(values, value)
+			if len(values) == len(awaitables) {
+				return values, nil
 			}
 		}
 	}
 }
 
-// AnyUint16Async is an asynchronous version of AnyUint16.
-func AnyUint16Async(awaitables ...<-chan uint16) <-chan uint16 {
-	resolver := make(chan uint16, 1)
-	go func() {
-		resolver <- AnyUint16(awaitables...)
-	}()
-	return resolver
+// AllUint16SlicesOrError will wait for every given task to emit a result or
+// return as soon as an error is encountered, canceling all other tasks.
+func AllUint16SlicesOrError(awaitables ...*task.Uint16SliceTask) ([][]uint16, error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.All(stop.ToStopables(v...)...)
+
+	errCh := make(chan error, 1)
+	valueCh := make(chan []uint16, 1)
+
+	for _, awaitable := range awaitables {
+		go func() {
+			v, err := awaitable.Result()
+			if err != nil {
+				errCh <- errors.Wrap(err, 0)
+				return
+			}
+			valueCh <- v
+		}()
+	}
+
+	values := [][]uint16{}
+	for {
+		select {
+		case err := <-errCh:
+			return nil, errors.Wrap(err, 0)
+		case value := <-valueCh:
+			values = append(values, value)
+			if len(values) == len(awaitables) {
+				return values, nil
+			}
+		}
+	}
 }
 
-// AnyUint16SliceAsync is an asynchronous version of AnyUint16.
-func AnyUint16SliceAsync(awaitables ...<-chan []uint16) <-chan []uint16 {
-	resolver := make(chan []uint16, 1)
-	go func() {
-		resolver <- AnyUint16Slice(awaitables...)
-	}()
-	return resolver
+// FastAllUint16SlicesOrError does the same as AllUint16SlicesOrError but
+// does not wait for all other tasks to stop. It does tell them to stop it just
+// doesn't wait for them to stop.
+func FastAllUint16SlicesOrError(awaitables ...*task.Uint16SliceTask) ([][]uint16, error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.AllAsync(stop.ToStopables(v...)...)
+
+	errCh := make(chan error, 1)
+	valueCh := make(chan []uint16, 1)
+
+	for _, awaitable := range awaitables {
+		go func() {
+			v, err := awaitable.Result()
+			if err != nil {
+				errCh <- errors.Wrap(err, 0)
+				return
+			}
+			valueCh <- v
+		}()
+	}
+
+	values := [][]uint16{}
+	for {
+		select {
+		case err := <-errCh:
+			return nil, errors.Wrap(err, 0)
+		case value := <-valueCh:
+			values = append(values, value)
+			if len(values) == len(awaitables) {
+				return values, nil
+			}
+		}
+	}
 }
 
-// AllUint32s will wait for every given channel to emit a single result.
-// The results will be returned in a slice ordered the same as the input channels.
-func AllUint32s(awaitables ...<-chan uint32) []uint32 {
+// AllUint32s will wait for every given task to emit a result.
+// The results (& errors) will be returned in a slice ordered the
+// same as the input.
+func AllUint32s(awaitables ...*task.Uint32Task) ([]uint32, error) {
 	awaited := []uint32{}
+	awaitedErrors := []error{}
+
 	for _, awaitable := range awaitables {
-		awaited = append(awaited, <-awaitable)
+		v, e := awaitable.Result()
+		awaited = append(awaited, v)
+		awaitedErrors = append(awaitedErrors, e)
 	}
-	return awaited
+
+	if len(awaitedErrors) > 0 {
+		return nil, errors.New(&ErrTaskFailed{
+			Errors: awaitedErrors,
+		})
+	}
+
+	return awaited, nil
 }
 
-// AllUint32Slices will wait for every given channel to emit a single result.
-// The results will be returned in a slice ordered the same as the input channels.
-func AllUint32Slices(awaitables ...<-chan []uint32) [][]uint32 {
+// AllUint32Slices will wait for every given task to emit a result.
+// The results (& errors) will be returned in a slice ordered the
+// same as the input.
+func AllUint32Slices(awaitables ...*task.Uint32SliceTask) ([][]uint32, error) {
 	awaited := [][]uint32{}
+	awaitedErrors := []error{}
+
 	for _, awaitable := range awaitables {
-		awaited = append(awaited, <-awaitable)
+		v, e := awaitable.Result()
+		awaited = append(awaited, v)
+		awaitedErrors = append(awaitedErrors, e)
 	}
-	return awaited
+
+	if len(awaitedErrors) > 0 {
+		return nil, errors.New(&ErrTaskFailed{
+			Errors: awaitedErrors,
+		})
+	}
+
+	return awaited, nil
 }
 
-// AllUint32sAsync is an asynchronous version of AllUint32s
-func AllUint32sAsync(awaitables ...<-chan uint32) <-chan []uint32 {
-	resolver := make(chan []uint32, 1)
-	go func() {
-		resolver <- AllUint32s(awaitables...)
-	}()
-	return resolver
+// AnyUint32 will wait for the first task to emit a result (or an error)
+// and return that, canceling all other tasks.
+func AnyUint32(awaitables ...*task.Uint32Task) (value uint32, err error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.All(stop.ToStopables(v...)...)
+
+	type doneOnce struct {
+		o  sync.Once
+		ch chan struct{}
+	}
+	done := doneOnce{
+		ch: make(chan struct{}, 1),
+	}
+	closeDone := func() {
+		done.o.Do(func() {
+			close(done.ch)
+		})
+	}
+
+	for _, awaitable := range awaitables {
+		go func() {
+			defer closeDone()
+			value, err = awaitable.Result()
+		}()
+	}
+
+	<-done.ch
+	return value, err
 }
 
-// AllUint32SlicesAsync is an asynchronous version of AllUint32Slices
-func AllUint32SlicesAsync(awaitables ...<-chan []uint32) <-chan [][]uint32 {
-	resolver := make(chan [][]uint32, 1)
-	go func() {
-		resolver <- AllUint32Slices(awaitables...)
-	}()
-	return resolver
+// FastAnyUint32 does the same as AnyUint32 but does not wait for all
+// other tasks to stop. It does tell them to stop it just doesn't wait for
+// them to stop.
+func FastAnyUint32(awaitables ...*task.Uint32Task) (value uint32, err error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.AllAsync(stop.ToStopables(v...)...)
+
+	type doneOnce struct {
+		o  sync.Once
+		ch chan struct{}
+	}
+	done := doneOnce{
+		ch: make(chan struct{}, 1),
+	}
+	closeDone := func() {
+		done.o.Do(func() {
+			close(done.ch)
+		})
+	}
+
+	for _, awaitable := range awaitables {
+		go func() {
+			defer closeDone()
+			value, err = awaitable.Result()
+		}()
+	}
+
+	<-done.ch
+	return value, err
 }
 
-// AnyUint32 will wait for the first channel to emit a single result
-// and return that, ignoring all other channels.
-func AnyUint32(awaitables ...<-chan uint32) uint32 {
+// AnyUint32Slice will wait for the first task to emit a result (or an error)
+// and return that, canceling all other tasks.
+func AnyUint32Slice(awaitables ...*task.Uint32SliceTask) (value []uint32, err error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.All(stop.ToStopables(v...)...)
+
+	type doneOnce struct {
+		o  sync.Once
+		ch chan struct{}
+	}
+	done := doneOnce{
+		ch: make(chan struct{}, 1),
+	}
+	closeDone := func() {
+		done.o.Do(func() {
+			close(done.ch)
+		})
+	}
+
+	for _, awaitable := range awaitables {
+		go func() {
+			defer closeDone()
+			value, err = awaitable.Result()
+		}()
+	}
+
+	<-done.ch
+	return value, err
+}
+
+// FastAnyUint32Slice does the same as AnyUint32Slice but does not wait
+// for all other tasks to stop. It does tell them to stop it just doesn't wait
+// for them to stop.
+func FastAnyUint32Slice(awaitables ...*task.Uint32SliceTask) (value []uint32, err error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.AllAsync(stop.ToStopables(v...)...)
+
+	type doneOnce struct {
+		o  sync.Once
+		ch chan struct{}
+	}
+	done := doneOnce{
+		ch: make(chan struct{}, 1),
+	}
+	closeDone := func() {
+		done.o.Do(func() {
+			close(done.ch)
+		})
+	}
+
+	for _, awaitable := range awaitables {
+		go func() {
+			defer closeDone()
+			value, err = awaitable.Result()
+		}()
+	}
+
+	<-done.ch
+	return value, err
+}
+
+// AllUint32sOrError will wait for every given task to emit a result or
+// return as soon as an error is encountered, canceling all other tasks.
+func AllUint32sOrError(awaitables ...*task.Uint32Task) ([]uint32, error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.All(stop.ToStopables(v...)...)
+
+	errCh := make(chan error, 1)
+	valueCh := make(chan uint32, 1)
+
+	for _, awaitable := range awaitables {
+		go func() {
+			v, err := awaitable.Result()
+			if err != nil {
+				errCh <- errors.Wrap(err, 0)
+				return
+			}
+			valueCh <- v
+		}()
+	}
+
+	values := []uint32{}
 	for {
-		for _, awaitable := range awaitables {
-			select {
-			default:
-			case awaited := <-awaitable:
-				return awaited
+		select {
+		case err := <-errCh:
+			return nil, errors.Wrap(err, 0)
+		case value := <-valueCh:
+			values = append(values, value)
+			if len(values) == len(awaitables) {
+				return values, nil
 			}
 		}
 	}
 }
 
-// AnyUint32Slice will wait for the first channel to emit a single result
-// and return that, ignoring all other channels.
-func AnyUint32Slice(awaitables ...<-chan []uint32) []uint32 {
+// FastAllUint32sOrError does the same as AllUint32sOrError but does not
+// wait for all other tasks to stop. It does tell them to stop it just doesn't
+// wait for them to stop.
+func FastAllUint32sOrError(awaitables ...*task.Uint32Task) ([]uint32, error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.AllAsync(stop.ToStopables(v...)...)
+
+	errCh := make(chan error, 1)
+	valueCh := make(chan uint32, 1)
+
+	for _, awaitable := range awaitables {
+		go func() {
+			v, err := awaitable.Result()
+			if err != nil {
+				errCh <- errors.Wrap(err, 0)
+				return
+			}
+			valueCh <- v
+		}()
+	}
+
+	values := []uint32{}
 	for {
-		for _, awaitable := range awaitables {
-			select {
-			default:
-			case awaited := <-awaitable:
-				return awaited
+		select {
+		case err := <-errCh:
+			return nil, errors.Wrap(err, 0)
+		case value := <-valueCh:
+			values = append(values, value)
+			if len(values) == len(awaitables) {
+				return values, nil
 			}
 		}
 	}
 }
 
-// AnyUint32Async is an asynchronous version of AnyUint32.
-func AnyUint32Async(awaitables ...<-chan uint32) <-chan uint32 {
-	resolver := make(chan uint32, 1)
-	go func() {
-		resolver <- AnyUint32(awaitables...)
-	}()
-	return resolver
+// AllUint32SlicesOrError will wait for every given task to emit a result or
+// return as soon as an error is encountered, canceling all other tasks.
+func AllUint32SlicesOrError(awaitables ...*task.Uint32SliceTask) ([][]uint32, error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.All(stop.ToStopables(v...)...)
+
+	errCh := make(chan error, 1)
+	valueCh := make(chan []uint32, 1)
+
+	for _, awaitable := range awaitables {
+		go func() {
+			v, err := awaitable.Result()
+			if err != nil {
+				errCh <- errors.Wrap(err, 0)
+				return
+			}
+			valueCh <- v
+		}()
+	}
+
+	values := [][]uint32{}
+	for {
+		select {
+		case err := <-errCh:
+			return nil, errors.Wrap(err, 0)
+		case value := <-valueCh:
+			values = append(values, value)
+			if len(values) == len(awaitables) {
+				return values, nil
+			}
+		}
+	}
 }
 
-// AnyUint32SliceAsync is an asynchronous version of AnyUint32.
-func AnyUint32SliceAsync(awaitables ...<-chan []uint32) <-chan []uint32 {
-	resolver := make(chan []uint32, 1)
-	go func() {
-		resolver <- AnyUint32Slice(awaitables...)
-	}()
-	return resolver
+// FastAllUint32SlicesOrError does the same as AllUint32SlicesOrError but
+// does not wait for all other tasks to stop. It does tell them to stop it just
+// doesn't wait for them to stop.
+func FastAllUint32SlicesOrError(awaitables ...*task.Uint32SliceTask) ([][]uint32, error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.AllAsync(stop.ToStopables(v...)...)
+
+	errCh := make(chan error, 1)
+	valueCh := make(chan []uint32, 1)
+
+	for _, awaitable := range awaitables {
+		go func() {
+			v, err := awaitable.Result()
+			if err != nil {
+				errCh <- errors.Wrap(err, 0)
+				return
+			}
+			valueCh <- v
+		}()
+	}
+
+	values := [][]uint32{}
+	for {
+		select {
+		case err := <-errCh:
+			return nil, errors.Wrap(err, 0)
+		case value := <-valueCh:
+			values = append(values, value)
+			if len(values) == len(awaitables) {
+				return values, nil
+			}
+		}
+	}
 }
 
-// AllUint64s will wait for every given channel to emit a single result.
-// The results will be returned in a slice ordered the same as the input channels.
-func AllUint64s(awaitables ...<-chan uint64) []uint64 {
+// AllUint64s will wait for every given task to emit a result.
+// The results (& errors) will be returned in a slice ordered the
+// same as the input.
+func AllUint64s(awaitables ...*task.Uint64Task) ([]uint64, error) {
 	awaited := []uint64{}
+	awaitedErrors := []error{}
+
 	for _, awaitable := range awaitables {
-		awaited = append(awaited, <-awaitable)
+		v, e := awaitable.Result()
+		awaited = append(awaited, v)
+		awaitedErrors = append(awaitedErrors, e)
 	}
-	return awaited
+
+	if len(awaitedErrors) > 0 {
+		return nil, errors.New(&ErrTaskFailed{
+			Errors: awaitedErrors,
+		})
+	}
+
+	return awaited, nil
 }
 
-// AllUint64Slices will wait for every given channel to emit a single result.
-// The results will be returned in a slice ordered the same as the input channels.
-func AllUint64Slices(awaitables ...<-chan []uint64) [][]uint64 {
+// AllUint64Slices will wait for every given task to emit a result.
+// The results (& errors) will be returned in a slice ordered the
+// same as the input.
+func AllUint64Slices(awaitables ...*task.Uint64SliceTask) ([][]uint64, error) {
 	awaited := [][]uint64{}
+	awaitedErrors := []error{}
+
 	for _, awaitable := range awaitables {
-		awaited = append(awaited, <-awaitable)
+		v, e := awaitable.Result()
+		awaited = append(awaited, v)
+		awaitedErrors = append(awaitedErrors, e)
 	}
-	return awaited
+
+	if len(awaitedErrors) > 0 {
+		return nil, errors.New(&ErrTaskFailed{
+			Errors: awaitedErrors,
+		})
+	}
+
+	return awaited, nil
 }
 
-// AllUint64sAsync is an asynchronous version of AllUint64s
-func AllUint64sAsync(awaitables ...<-chan uint64) <-chan []uint64 {
-	resolver := make(chan []uint64, 1)
-	go func() {
-		resolver <- AllUint64s(awaitables...)
-	}()
-	return resolver
+// AnyUint64 will wait for the first task to emit a result (or an error)
+// and return that, canceling all other tasks.
+func AnyUint64(awaitables ...*task.Uint64Task) (value uint64, err error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.All(stop.ToStopables(v...)...)
+
+	type doneOnce struct {
+		o  sync.Once
+		ch chan struct{}
+	}
+	done := doneOnce{
+		ch: make(chan struct{}, 1),
+	}
+	closeDone := func() {
+		done.o.Do(func() {
+			close(done.ch)
+		})
+	}
+
+	for _, awaitable := range awaitables {
+		go func() {
+			defer closeDone()
+			value, err = awaitable.Result()
+		}()
+	}
+
+	<-done.ch
+	return value, err
 }
 
-// AllUint64SlicesAsync is an asynchronous version of AllUint64Slices
-func AllUint64SlicesAsync(awaitables ...<-chan []uint64) <-chan [][]uint64 {
-	resolver := make(chan [][]uint64, 1)
-	go func() {
-		resolver <- AllUint64Slices(awaitables...)
-	}()
-	return resolver
+// FastAnyUint64 does the same as AnyUint64 but does not wait for all
+// other tasks to stop. It does tell them to stop it just doesn't wait for
+// them to stop.
+func FastAnyUint64(awaitables ...*task.Uint64Task) (value uint64, err error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.AllAsync(stop.ToStopables(v...)...)
+
+	type doneOnce struct {
+		o  sync.Once
+		ch chan struct{}
+	}
+	done := doneOnce{
+		ch: make(chan struct{}, 1),
+	}
+	closeDone := func() {
+		done.o.Do(func() {
+			close(done.ch)
+		})
+	}
+
+	for _, awaitable := range awaitables {
+		go func() {
+			defer closeDone()
+			value, err = awaitable.Result()
+		}()
+	}
+
+	<-done.ch
+	return value, err
 }
 
-// AnyUint64 will wait for the first channel to emit a single result
-// and return that, ignoring all other channels.
-func AnyUint64(awaitables ...<-chan uint64) uint64 {
+// AnyUint64Slice will wait for the first task to emit a result (or an error)
+// and return that, canceling all other tasks.
+func AnyUint64Slice(awaitables ...*task.Uint64SliceTask) (value []uint64, err error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.All(stop.ToStopables(v...)...)
+
+	type doneOnce struct {
+		o  sync.Once
+		ch chan struct{}
+	}
+	done := doneOnce{
+		ch: make(chan struct{}, 1),
+	}
+	closeDone := func() {
+		done.o.Do(func() {
+			close(done.ch)
+		})
+	}
+
+	for _, awaitable := range awaitables {
+		go func() {
+			defer closeDone()
+			value, err = awaitable.Result()
+		}()
+	}
+
+	<-done.ch
+	return value, err
+}
+
+// FastAnyUint64Slice does the same as AnyUint64Slice but does not wait
+// for all other tasks to stop. It does tell them to stop it just doesn't wait
+// for them to stop.
+func FastAnyUint64Slice(awaitables ...*task.Uint64SliceTask) (value []uint64, err error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.AllAsync(stop.ToStopables(v...)...)
+
+	type doneOnce struct {
+		o  sync.Once
+		ch chan struct{}
+	}
+	done := doneOnce{
+		ch: make(chan struct{}, 1),
+	}
+	closeDone := func() {
+		done.o.Do(func() {
+			close(done.ch)
+		})
+	}
+
+	for _, awaitable := range awaitables {
+		go func() {
+			defer closeDone()
+			value, err = awaitable.Result()
+		}()
+	}
+
+	<-done.ch
+	return value, err
+}
+
+// AllUint64sOrError will wait for every given task to emit a result or
+// return as soon as an error is encountered, canceling all other tasks.
+func AllUint64sOrError(awaitables ...*task.Uint64Task) ([]uint64, error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.All(stop.ToStopables(v...)...)
+
+	errCh := make(chan error, 1)
+	valueCh := make(chan uint64, 1)
+
+	for _, awaitable := range awaitables {
+		go func() {
+			v, err := awaitable.Result()
+			if err != nil {
+				errCh <- errors.Wrap(err, 0)
+				return
+			}
+			valueCh <- v
+		}()
+	}
+
+	values := []uint64{}
 	for {
-		for _, awaitable := range awaitables {
-			select {
-			default:
-			case awaited := <-awaitable:
-				return awaited
+		select {
+		case err := <-errCh:
+			return nil, errors.Wrap(err, 0)
+		case value := <-valueCh:
+			values = append(values, value)
+			if len(values) == len(awaitables) {
+				return values, nil
 			}
 		}
 	}
 }
 
-// AnyUint64Slice will wait for the first channel to emit a single result
-// and return that, ignoring all other channels.
-func AnyUint64Slice(awaitables ...<-chan []uint64) []uint64 {
+// FastAllUint64sOrError does the same as AllUint64sOrError but does not
+// wait for all other tasks to stop. It does tell them to stop it just doesn't
+// wait for them to stop.
+func FastAllUint64sOrError(awaitables ...*task.Uint64Task) ([]uint64, error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.AllAsync(stop.ToStopables(v...)...)
+
+	errCh := make(chan error, 1)
+	valueCh := make(chan uint64, 1)
+
+	for _, awaitable := range awaitables {
+		go func() {
+			v, err := awaitable.Result()
+			if err != nil {
+				errCh <- errors.Wrap(err, 0)
+				return
+			}
+			valueCh <- v
+		}()
+	}
+
+	values := []uint64{}
 	for {
-		for _, awaitable := range awaitables {
-			select {
-			default:
-			case awaited := <-awaitable:
-				return awaited
+		select {
+		case err := <-errCh:
+			return nil, errors.Wrap(err, 0)
+		case value := <-valueCh:
+			values = append(values, value)
+			if len(values) == len(awaitables) {
+				return values, nil
 			}
 		}
 	}
 }
 
-// AnyUint64Async is an asynchronous version of AnyUint64.
-func AnyUint64Async(awaitables ...<-chan uint64) <-chan uint64 {
-	resolver := make(chan uint64, 1)
-	go func() {
-		resolver <- AnyUint64(awaitables...)
-	}()
-	return resolver
+// AllUint64SlicesOrError will wait for every given task to emit a result or
+// return as soon as an error is encountered, canceling all other tasks.
+func AllUint64SlicesOrError(awaitables ...*task.Uint64SliceTask) ([][]uint64, error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.All(stop.ToStopables(v...)...)
+
+	errCh := make(chan error, 1)
+	valueCh := make(chan []uint64, 1)
+
+	for _, awaitable := range awaitables {
+		go func() {
+			v, err := awaitable.Result()
+			if err != nil {
+				errCh <- errors.Wrap(err, 0)
+				return
+			}
+			valueCh <- v
+		}()
+	}
+
+	values := [][]uint64{}
+	for {
+		select {
+		case err := <-errCh:
+			return nil, errors.Wrap(err, 0)
+		case value := <-valueCh:
+			values = append(values, value)
+			if len(values) == len(awaitables) {
+				return values, nil
+			}
+		}
+	}
 }
 
-// AnyUint64SliceAsync is an asynchronous version of AnyUint64.
-func AnyUint64SliceAsync(awaitables ...<-chan []uint64) <-chan []uint64 {
-	resolver := make(chan []uint64, 1)
-	go func() {
-		resolver <- AnyUint64Slice(awaitables...)
-	}()
-	return resolver
+// FastAllUint64SlicesOrError does the same as AllUint64SlicesOrError but
+// does not wait for all other tasks to stop. It does tell them to stop it just
+// doesn't wait for them to stop.
+func FastAllUint64SlicesOrError(awaitables ...*task.Uint64SliceTask) ([][]uint64, error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.AllAsync(stop.ToStopables(v...)...)
+
+	errCh := make(chan error, 1)
+	valueCh := make(chan []uint64, 1)
+
+	for _, awaitable := range awaitables {
+		go func() {
+			v, err := awaitable.Result()
+			if err != nil {
+				errCh <- errors.Wrap(err, 0)
+				return
+			}
+			valueCh <- v
+		}()
+	}
+
+	values := [][]uint64{}
+	for {
+		select {
+		case err := <-errCh:
+			return nil, errors.Wrap(err, 0)
+		case value := <-valueCh:
+			values = append(values, value)
+			if len(values) == len(awaitables) {
+				return values, nil
+			}
+		}
+	}
 }
 
-// AllUint8s will wait for every given channel to emit a single result.
-// The results will be returned in a slice ordered the same as the input channels.
-func AllUint8s(awaitables ...<-chan uint8) []uint8 {
+// AllUint8s will wait for every given task to emit a result.
+// The results (& errors) will be returned in a slice ordered the
+// same as the input.
+func AllUint8s(awaitables ...*task.Uint8Task) ([]uint8, error) {
 	awaited := []uint8{}
+	awaitedErrors := []error{}
+
 	for _, awaitable := range awaitables {
-		awaited = append(awaited, <-awaitable)
+		v, e := awaitable.Result()
+		awaited = append(awaited, v)
+		awaitedErrors = append(awaitedErrors, e)
 	}
-	return awaited
+
+	if len(awaitedErrors) > 0 {
+		return nil, errors.New(&ErrTaskFailed{
+			Errors: awaitedErrors,
+		})
+	}
+
+	return awaited, nil
 }
 
-// AllUint8Slices will wait for every given channel to emit a single result.
-// The results will be returned in a slice ordered the same as the input channels.
-func AllUint8Slices(awaitables ...<-chan []uint8) [][]uint8 {
+// AllUint8Slices will wait for every given task to emit a result.
+// The results (& errors) will be returned in a slice ordered the
+// same as the input.
+func AllUint8Slices(awaitables ...*task.Uint8SliceTask) ([][]uint8, error) {
 	awaited := [][]uint8{}
+	awaitedErrors := []error{}
+
 	for _, awaitable := range awaitables {
-		awaited = append(awaited, <-awaitable)
+		v, e := awaitable.Result()
+		awaited = append(awaited, v)
+		awaitedErrors = append(awaitedErrors, e)
 	}
-	return awaited
+
+	if len(awaitedErrors) > 0 {
+		return nil, errors.New(&ErrTaskFailed{
+			Errors: awaitedErrors,
+		})
+	}
+
+	return awaited, nil
 }
 
-// AllUint8sAsync is an asynchronous version of AllUint8s
-func AllUint8sAsync(awaitables ...<-chan uint8) <-chan []uint8 {
-	resolver := make(chan []uint8, 1)
-	go func() {
-		resolver <- AllUint8s(awaitables...)
-	}()
-	return resolver
+// AnyUint8 will wait for the first task to emit a result (or an error)
+// and return that, canceling all other tasks.
+func AnyUint8(awaitables ...*task.Uint8Task) (value uint8, err error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.All(stop.ToStopables(v...)...)
+
+	type doneOnce struct {
+		o  sync.Once
+		ch chan struct{}
+	}
+	done := doneOnce{
+		ch: make(chan struct{}, 1),
+	}
+	closeDone := func() {
+		done.o.Do(func() {
+			close(done.ch)
+		})
+	}
+
+	for _, awaitable := range awaitables {
+		go func() {
+			defer closeDone()
+			value, err = awaitable.Result()
+		}()
+	}
+
+	<-done.ch
+	return value, err
 }
 
-// AllUint8SlicesAsync is an asynchronous version of AllUint8Slices
-func AllUint8SlicesAsync(awaitables ...<-chan []uint8) <-chan [][]uint8 {
-	resolver := make(chan [][]uint8, 1)
-	go func() {
-		resolver <- AllUint8Slices(awaitables...)
-	}()
-	return resolver
+// FastAnyUint8 does the same as AnyUint8 but does not wait for all
+// other tasks to stop. It does tell them to stop it just doesn't wait for
+// them to stop.
+func FastAnyUint8(awaitables ...*task.Uint8Task) (value uint8, err error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.AllAsync(stop.ToStopables(v...)...)
+
+	type doneOnce struct {
+		o  sync.Once
+		ch chan struct{}
+	}
+	done := doneOnce{
+		ch: make(chan struct{}, 1),
+	}
+	closeDone := func() {
+		done.o.Do(func() {
+			close(done.ch)
+		})
+	}
+
+	for _, awaitable := range awaitables {
+		go func() {
+			defer closeDone()
+			value, err = awaitable.Result()
+		}()
+	}
+
+	<-done.ch
+	return value, err
 }
 
-// AnyUint8 will wait for the first channel to emit a single result
-// and return that, ignoring all other channels.
-func AnyUint8(awaitables ...<-chan uint8) uint8 {
+// AnyUint8Slice will wait for the first task to emit a result (or an error)
+// and return that, canceling all other tasks.
+func AnyUint8Slice(awaitables ...*task.Uint8SliceTask) (value []uint8, err error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.All(stop.ToStopables(v...)...)
+
+	type doneOnce struct {
+		o  sync.Once
+		ch chan struct{}
+	}
+	done := doneOnce{
+		ch: make(chan struct{}, 1),
+	}
+	closeDone := func() {
+		done.o.Do(func() {
+			close(done.ch)
+		})
+	}
+
+	for _, awaitable := range awaitables {
+		go func() {
+			defer closeDone()
+			value, err = awaitable.Result()
+		}()
+	}
+
+	<-done.ch
+	return value, err
+}
+
+// FastAnyUint8Slice does the same as AnyUint8Slice but does not wait
+// for all other tasks to stop. It does tell them to stop it just doesn't wait
+// for them to stop.
+func FastAnyUint8Slice(awaitables ...*task.Uint8SliceTask) (value []uint8, err error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.AllAsync(stop.ToStopables(v...)...)
+
+	type doneOnce struct {
+		o  sync.Once
+		ch chan struct{}
+	}
+	done := doneOnce{
+		ch: make(chan struct{}, 1),
+	}
+	closeDone := func() {
+		done.o.Do(func() {
+			close(done.ch)
+		})
+	}
+
+	for _, awaitable := range awaitables {
+		go func() {
+			defer closeDone()
+			value, err = awaitable.Result()
+		}()
+	}
+
+	<-done.ch
+	return value, err
+}
+
+// AllUint8sOrError will wait for every given task to emit a result or
+// return as soon as an error is encountered, canceling all other tasks.
+func AllUint8sOrError(awaitables ...*task.Uint8Task) ([]uint8, error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.All(stop.ToStopables(v...)...)
+
+	errCh := make(chan error, 1)
+	valueCh := make(chan uint8, 1)
+
+	for _, awaitable := range awaitables {
+		go func() {
+			v, err := awaitable.Result()
+			if err != nil {
+				errCh <- errors.Wrap(err, 0)
+				return
+			}
+			valueCh <- v
+		}()
+	}
+
+	values := []uint8{}
 	for {
-		for _, awaitable := range awaitables {
-			select {
-			default:
-			case awaited := <-awaitable:
-				return awaited
+		select {
+		case err := <-errCh:
+			return nil, errors.Wrap(err, 0)
+		case value := <-valueCh:
+			values = append(values, value)
+			if len(values) == len(awaitables) {
+				return values, nil
 			}
 		}
 	}
 }
 
-// AnyUint8Slice will wait for the first channel to emit a single result
-// and return that, ignoring all other channels.
-func AnyUint8Slice(awaitables ...<-chan []uint8) []uint8 {
+// FastAllUint8sOrError does the same as AllUint8sOrError but does not
+// wait for all other tasks to stop. It does tell them to stop it just doesn't
+// wait for them to stop.
+func FastAllUint8sOrError(awaitables ...*task.Uint8Task) ([]uint8, error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.AllAsync(stop.ToStopables(v...)...)
+
+	errCh := make(chan error, 1)
+	valueCh := make(chan uint8, 1)
+
+	for _, awaitable := range awaitables {
+		go func() {
+			v, err := awaitable.Result()
+			if err != nil {
+				errCh <- errors.Wrap(err, 0)
+				return
+			}
+			valueCh <- v
+		}()
+	}
+
+	values := []uint8{}
 	for {
-		for _, awaitable := range awaitables {
-			select {
-			default:
-			case awaited := <-awaitable:
-				return awaited
+		select {
+		case err := <-errCh:
+			return nil, errors.Wrap(err, 0)
+		case value := <-valueCh:
+			values = append(values, value)
+			if len(values) == len(awaitables) {
+				return values, nil
 			}
 		}
 	}
 }
 
-// AnyUint8Async is an asynchronous version of AnyUint8.
-func AnyUint8Async(awaitables ...<-chan uint8) <-chan uint8 {
-	resolver := make(chan uint8, 1)
-	go func() {
-		resolver <- AnyUint8(awaitables...)
-	}()
-	return resolver
+// AllUint8SlicesOrError will wait for every given task to emit a result or
+// return as soon as an error is encountered, canceling all other tasks.
+func AllUint8SlicesOrError(awaitables ...*task.Uint8SliceTask) ([][]uint8, error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.All(stop.ToStopables(v...)...)
+
+	errCh := make(chan error, 1)
+	valueCh := make(chan []uint8, 1)
+
+	for _, awaitable := range awaitables {
+		go func() {
+			v, err := awaitable.Result()
+			if err != nil {
+				errCh <- errors.Wrap(err, 0)
+				return
+			}
+			valueCh <- v
+		}()
+	}
+
+	values := [][]uint8{}
+	for {
+		select {
+		case err := <-errCh:
+			return nil, errors.Wrap(err, 0)
+		case value := <-valueCh:
+			values = append(values, value)
+			if len(values) == len(awaitables) {
+				return values, nil
+			}
+		}
+	}
 }
 
-// AnyUint8SliceAsync is an asynchronous version of AnyUint8.
-func AnyUint8SliceAsync(awaitables ...<-chan []uint8) <-chan []uint8 {
-	resolver := make(chan []uint8, 1)
-	go func() {
-		resolver <- AnyUint8Slice(awaitables...)
-	}()
-	return resolver
+// FastAllUint8SlicesOrError does the same as AllUint8SlicesOrError but
+// does not wait for all other tasks to stop. It does tell them to stop it just
+// doesn't wait for them to stop.
+func FastAllUint8SlicesOrError(awaitables ...*task.Uint8SliceTask) ([][]uint8, error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.AllAsync(stop.ToStopables(v...)...)
+
+	errCh := make(chan error, 1)
+	valueCh := make(chan []uint8, 1)
+
+	for _, awaitable := range awaitables {
+		go func() {
+			v, err := awaitable.Result()
+			if err != nil {
+				errCh <- errors.Wrap(err, 0)
+				return
+			}
+			valueCh <- v
+		}()
+	}
+
+	values := [][]uint8{}
+	for {
+		select {
+		case err := <-errCh:
+			return nil, errors.Wrap(err, 0)
+		case value := <-valueCh:
+			values = append(values, value)
+			if len(values) == len(awaitables) {
+				return values, nil
+			}
+		}
+	}
 }
 
-// AllUintptrs will wait for every given channel to emit a single result.
-// The results will be returned in a slice ordered the same as the input channels.
-func AllUintptrs(awaitables ...<-chan uintptr) []uintptr {
+// AllUintptrs will wait for every given task to emit a result.
+// The results (& errors) will be returned in a slice ordered the
+// same as the input.
+func AllUintptrs(awaitables ...*task.UintptrTask) ([]uintptr, error) {
 	awaited := []uintptr{}
+	awaitedErrors := []error{}
+
 	for _, awaitable := range awaitables {
-		awaited = append(awaited, <-awaitable)
+		v, e := awaitable.Result()
+		awaited = append(awaited, v)
+		awaitedErrors = append(awaitedErrors, e)
 	}
-	return awaited
+
+	if len(awaitedErrors) > 0 {
+		return nil, errors.New(&ErrTaskFailed{
+			Errors: awaitedErrors,
+		})
+	}
+
+	return awaited, nil
 }
 
-// AllUintptrSlices will wait for every given channel to emit a single result.
-// The results will be returned in a slice ordered the same as the input channels.
-func AllUintptrSlices(awaitables ...<-chan []uintptr) [][]uintptr {
+// AllUintptrSlices will wait for every given task to emit a result.
+// The results (& errors) will be returned in a slice ordered the
+// same as the input.
+func AllUintptrSlices(awaitables ...*task.UintptrSliceTask) ([][]uintptr, error) {
 	awaited := [][]uintptr{}
+	awaitedErrors := []error{}
+
 	for _, awaitable := range awaitables {
-		awaited = append(awaited, <-awaitable)
+		v, e := awaitable.Result()
+		awaited = append(awaited, v)
+		awaitedErrors = append(awaitedErrors, e)
 	}
-	return awaited
+
+	if len(awaitedErrors) > 0 {
+		return nil, errors.New(&ErrTaskFailed{
+			Errors: awaitedErrors,
+		})
+	}
+
+	return awaited, nil
 }
 
-// AllUintptrsAsync is an asynchronous version of AllUintptrs
-func AllUintptrsAsync(awaitables ...<-chan uintptr) <-chan []uintptr {
-	resolver := make(chan []uintptr, 1)
-	go func() {
-		resolver <- AllUintptrs(awaitables...)
-	}()
-	return resolver
+// AnyUintptr will wait for the first task to emit a result (or an error)
+// and return that, canceling all other tasks.
+func AnyUintptr(awaitables ...*task.UintptrTask) (value uintptr, err error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.All(stop.ToStopables(v...)...)
+
+	type doneOnce struct {
+		o  sync.Once
+		ch chan struct{}
+	}
+	done := doneOnce{
+		ch: make(chan struct{}, 1),
+	}
+	closeDone := func() {
+		done.o.Do(func() {
+			close(done.ch)
+		})
+	}
+
+	for _, awaitable := range awaitables {
+		go func() {
+			defer closeDone()
+			value, err = awaitable.Result()
+		}()
+	}
+
+	<-done.ch
+	return value, err
 }
 
-// AllUintptrSlicesAsync is an asynchronous version of AllUintptrSlices
-func AllUintptrSlicesAsync(awaitables ...<-chan []uintptr) <-chan [][]uintptr {
-	resolver := make(chan [][]uintptr, 1)
-	go func() {
-		resolver <- AllUintptrSlices(awaitables...)
-	}()
-	return resolver
+// FastAnyUintptr does the same as AnyUintptr but does not wait for all
+// other tasks to stop. It does tell them to stop it just doesn't wait for
+// them to stop.
+func FastAnyUintptr(awaitables ...*task.UintptrTask) (value uintptr, err error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.AllAsync(stop.ToStopables(v...)...)
+
+	type doneOnce struct {
+		o  sync.Once
+		ch chan struct{}
+	}
+	done := doneOnce{
+		ch: make(chan struct{}, 1),
+	}
+	closeDone := func() {
+		done.o.Do(func() {
+			close(done.ch)
+		})
+	}
+
+	for _, awaitable := range awaitables {
+		go func() {
+			defer closeDone()
+			value, err = awaitable.Result()
+		}()
+	}
+
+	<-done.ch
+	return value, err
 }
 
-// AnyUintptr will wait for the first channel to emit a single result
-// and return that, ignoring all other channels.
-func AnyUintptr(awaitables ...<-chan uintptr) uintptr {
+// AnyUintptrSlice will wait for the first task to emit a result (or an error)
+// and return that, canceling all other tasks.
+func AnyUintptrSlice(awaitables ...*task.UintptrSliceTask) (value []uintptr, err error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.All(stop.ToStopables(v...)...)
+
+	type doneOnce struct {
+		o  sync.Once
+		ch chan struct{}
+	}
+	done := doneOnce{
+		ch: make(chan struct{}, 1),
+	}
+	closeDone := func() {
+		done.o.Do(func() {
+			close(done.ch)
+		})
+	}
+
+	for _, awaitable := range awaitables {
+		go func() {
+			defer closeDone()
+			value, err = awaitable.Result()
+		}()
+	}
+
+	<-done.ch
+	return value, err
+}
+
+// FastAnyUintptrSlice does the same as AnyUintptrSlice but does not wait
+// for all other tasks to stop. It does tell them to stop it just doesn't wait
+// for them to stop.
+func FastAnyUintptrSlice(awaitables ...*task.UintptrSliceTask) (value []uintptr, err error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.AllAsync(stop.ToStopables(v...)...)
+
+	type doneOnce struct {
+		o  sync.Once
+		ch chan struct{}
+	}
+	done := doneOnce{
+		ch: make(chan struct{}, 1),
+	}
+	closeDone := func() {
+		done.o.Do(func() {
+			close(done.ch)
+		})
+	}
+
+	for _, awaitable := range awaitables {
+		go func() {
+			defer closeDone()
+			value, err = awaitable.Result()
+		}()
+	}
+
+	<-done.ch
+	return value, err
+}
+
+// AllUintptrsOrError will wait for every given task to emit a result or
+// return as soon as an error is encountered, canceling all other tasks.
+func AllUintptrsOrError(awaitables ...*task.UintptrTask) ([]uintptr, error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.All(stop.ToStopables(v...)...)
+
+	errCh := make(chan error, 1)
+	valueCh := make(chan uintptr, 1)
+
+	for _, awaitable := range awaitables {
+		go func() {
+			v, err := awaitable.Result()
+			if err != nil {
+				errCh <- errors.Wrap(err, 0)
+				return
+			}
+			valueCh <- v
+		}()
+	}
+
+	values := []uintptr{}
 	for {
-		for _, awaitable := range awaitables {
-			select {
-			default:
-			case awaited := <-awaitable:
-				return awaited
+		select {
+		case err := <-errCh:
+			return nil, errors.Wrap(err, 0)
+		case value := <-valueCh:
+			values = append(values, value)
+			if len(values) == len(awaitables) {
+				return values, nil
 			}
 		}
 	}
 }
 
-// AnyUintptrSlice will wait for the first channel to emit a single result
-// and return that, ignoring all other channels.
-func AnyUintptrSlice(awaitables ...<-chan []uintptr) []uintptr {
+// FastAllUintptrsOrError does the same as AllUintptrsOrError but does not
+// wait for all other tasks to stop. It does tell them to stop it just doesn't
+// wait for them to stop.
+func FastAllUintptrsOrError(awaitables ...*task.UintptrTask) ([]uintptr, error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.AllAsync(stop.ToStopables(v...)...)
+
+	errCh := make(chan error, 1)
+	valueCh := make(chan uintptr, 1)
+
+	for _, awaitable := range awaitables {
+		go func() {
+			v, err := awaitable.Result()
+			if err != nil {
+				errCh <- errors.Wrap(err, 0)
+				return
+			}
+			valueCh <- v
+		}()
+	}
+
+	values := []uintptr{}
 	for {
-		for _, awaitable := range awaitables {
-			select {
-			default:
-			case awaited := <-awaitable:
-				return awaited
+		select {
+		case err := <-errCh:
+			return nil, errors.Wrap(err, 0)
+		case value := <-valueCh:
+			values = append(values, value)
+			if len(values) == len(awaitables) {
+				return values, nil
 			}
 		}
 	}
 }
 
-// AnyUintptrAsync is an asynchronous version of AnyUintptr.
-func AnyUintptrAsync(awaitables ...<-chan uintptr) <-chan uintptr {
-	resolver := make(chan uintptr, 1)
-	go func() {
-		resolver <- AnyUintptr(awaitables...)
-	}()
-	return resolver
+// AllUintptrSlicesOrError will wait for every given task to emit a result or
+// return as soon as an error is encountered, canceling all other tasks.
+func AllUintptrSlicesOrError(awaitables ...*task.UintptrSliceTask) ([][]uintptr, error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.All(stop.ToStopables(v...)...)
+
+	errCh := make(chan error, 1)
+	valueCh := make(chan []uintptr, 1)
+
+	for _, awaitable := range awaitables {
+		go func() {
+			v, err := awaitable.Result()
+			if err != nil {
+				errCh <- errors.Wrap(err, 0)
+				return
+			}
+			valueCh <- v
+		}()
+	}
+
+	values := [][]uintptr{}
+	for {
+		select {
+		case err := <-errCh:
+			return nil, errors.Wrap(err, 0)
+		case value := <-valueCh:
+			values = append(values, value)
+			if len(values) == len(awaitables) {
+				return values, nil
+			}
+		}
+	}
 }
 
-// AnyUintptrSliceAsync is an asynchronous version of AnyUintptr.
-func AnyUintptrSliceAsync(awaitables ...<-chan []uintptr) <-chan []uintptr {
-	resolver := make(chan []uintptr, 1)
-	go func() {
-		resolver <- AnyUintptrSlice(awaitables...)
-	}()
-	return resolver
+// FastAllUintptrSlicesOrError does the same as AllUintptrSlicesOrError but
+// does not wait for all other tasks to stop. It does tell them to stop it just
+// doesn't wait for them to stop.
+func FastAllUintptrSlicesOrError(awaitables ...*task.UintptrSliceTask) ([][]uintptr, error) {
+	v := make([]interface{}, len(awaitables))
+	for i := range awaitables {
+		v[i] = awaitables[i]
+	}
+	defer stop.AllAsync(stop.ToStopables(v...)...)
+
+	errCh := make(chan error, 1)
+	valueCh := make(chan []uintptr, 1)
+
+	for _, awaitable := range awaitables {
+		go func() {
+			v, err := awaitable.Result()
+			if err != nil {
+				errCh <- errors.Wrap(err, 0)
+				return
+			}
+			valueCh <- v
+		}()
+	}
+
+	values := [][]uintptr{}
+	for {
+		select {
+		case err := <-errCh:
+			return nil, errors.Wrap(err, 0)
+		case value := <-valueCh:
+			values = append(values, value)
+			if len(values) == len(awaitables) {
+				return values, nil
+			}
+		}
+	}
 }
