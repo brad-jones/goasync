@@ -1,21 +1,25 @@
 /*
 Package goasync is a helper framework for writing asynchronous code in go.
-It's 2 primary goals are to remain type safe while reducing boilier plate code.
+It's primary goal is to reduce the amount of boilier plate code one has to
+write to do concurrent tasks.
 
 Preface: My ideas presented here may not necessarily be theoretically perfect
 but I am taking a pragmatic approach to my development of golang code, while at
 the same time keeping in mind that go is go and not another language... go is
 verbose suck it up and move on.
 
-Prior Art
+TLDR: Don't care about my journey through golang's concurrency model,
+just want to know how this library works, skip down to The Task API.
 
-The basic issue with most of these solutions is they end up using
-`interface{}` and/or reflection. Both of which I would love to avoid.
+Prior Art
 
 https://github.com/chebyrash/promise
 
 https://github.com/fanliao/go-promise
 
+https://github.com/capitalone/go-future-context
+
+https://github.com/rafaeldias/async
 
 Other Reading
 
@@ -32,7 +36,8 @@ Async Functions in Go
 Sure you can prefix any function call with `go` and it will run asynchronously
 but this isn't always the full story, more often than not you have to deal with
 the results of that function call, including any error handling strategy and at
-the very least some sort of method of ensuring it actually runs to completion.
+the very least some sort of method of ensuring it actually runs to completion
+not to mention cancelation.
 
 This is what I consider to be the basic async function:
 
@@ -79,16 +84,42 @@ before anything has been setup to read the channels.
 		ch3 <- v
 	}()
 
-Just write a Synchronous API and let the consumer use it Asynchronously if they want
+Adding Cancelation
 
-My issue with this is the boilerplate code one has to write to do this.
-Whatever happened to DRY? I believe the methodologies outlined by this
-library strike a reasonable balance between writing idiomatic go and going
-insane repeating yourself everywhere.
+	func fooAsync(bar <-chan string) (resolver <-chan string, rejector <-chan error, stopper chan<- struct{}) {
+		resolver = make(chan string, 1)
+		rejector = make(chan error, 1)
+		stopper = make(chan struct{}, 1)
+		go func() {
+			for {
+				select {
+				case <-stopper:
+					return
+				case <-time.After(5 * time.Second):
+					resolver <- value
+					return
+				default:
+					v, err := doSomething(<-bar)
+					if err != nil {
+						rejector <- err
+					} else {
+						value = value + v
+					}
+				}
+			}
+		}()
+		return resolver, rejector, stopper
+	}
 
-Whats more this is just one way things can be done, if you need something more
-powerful for a particular use case then the full power of go's concurrency model
-is still there, this library doesn't take any of that away.
+* So we just written 24 lines of code and only one of them actually does anything
+of any importance.
+
+* While there are some cases where having the resolver, rejector & stopper
+separate it gets hard to keep track with many variables. What if fooAsync
+above wanted to see the error of bar, you would have to pass that in too.
+
+* Why not use context.Context? Plenty of reading about that
+https://dave.cheney.net/2017/08/20/context-isnt-for-cancellation
 
 Awaiting in Go
 
@@ -233,126 +264,79 @@ and it will wait on the channel inside it's own goroutine.
 		panic(err)
 	}
 
-Making Channels
+Just write a Synchronous API and let the consumer use it Asynchronously if they want
 
-Up to this point all I have shown you is how to do some stuff with vanilla go.
-Now I will introduce the first set of helper functions that this library provides.
+My issue with this is the boilerplate code one has to write to do this.
+Whatever happened to DRY? I believe the methodologies outlined by this
+library strike a reasonable balance between writing idiomatic go and going
+insane repeating yourself everywhere.
 
-Due to the rule above that, "any inputs to an async function must be channels",
-it becomes a pain to start off an asynchronous chain like the above.
+Whats more this is just one way things can be done, if you need something more
+powerful for a particular use case then the full power of go's concurrency model
+is still there, this library doesn't take any of that away.
 
-Now if you know for certain that a particular function will always be used at
-the start and never, ever have to accept input from another async function then
-by all means just make the function accept the value directly and move on.
+Up to this point all I have shown you is how to do some stuff with vanilla go
+and I hope that not only does it illustrate some of my frustrations with the
+language but also acts a useful reference to go back to when you need to do
+something more complex.
 
-However for the cases that you can not be so certain how your async function
-will be used then you can use the `MakeCh` helpers like so:
+The Task API
 
-	import "github.com/brad-jones/goasync/ch"
+Here is an example of `fooAsync` but this time it uses https://github.com/brad-jones/goasync/task
 
-	aTag, aErr := BuildDockerImageAsync(ch.MakeString("aFile"))
-	bTag, bErr := BuildDockerImageAsync(ch.MakeString("bFile"))
-	cTag, cErr := BuildDockerImageAsync(ch.MakeString("cFile"))
-
-Await Helpers
-
-Using select to await for things is very powerful but it is also very verbose
-so this library provides a collection of await helpers, for example:
-
-	import "github.com/brad-jones/goasync/await"
-
-	firstString := await.AnyString(aTag, bTag, cTag)
-	allStrings := await.AllStrings(aTag, bTag, cTag)
-
-Async Awaiters
-
-Yes you heard me, we can have async awaiters, an example is worth a 1000 words:
-
-	import "github.com/brad-jones/goasync/await"
-
-	aDeployDone, aDeployErr := DeployDockerImageAsync(aPubDone)
-	bDeployDone, bDeployErr := DeployDockerImageAsync(bPubDone)
-	cDeployDone, cDeployErr := DeployDockerImageAsync(cPubDone)
-
-	select {
-	case <-await.AllAsync(aDeployDone, bDeployDone, cDeployDone):
-	case err := <-await.AnyErrorAsync(aDeployErr, bDeployErr, cDeployErr):
-		panic(err)
-	}
-
-Cancellations
-
-If you wish for your async function to return early in the event another async
-function returns an error, or the context is otherwise canceled, you might do
-something like:
-
-	// a so called long running function will usually involve a loop
-	// of some sort that allows us to check the context on each iteration
-	func longRunningAsyncWithContext(ctx context.Context, bar <-chan []string) (<-chan []string, <-chan error) {
-		resolver := make(chan []string, 1)
-		rejector := make(chan error, 1)
-		go func() {
-			output := []string{}
-			for _, b := range <-bar {
-				select {
-				case <-ctx.Done():
-					return
-				default:
-					v, err := doSomething(b)
-					if err != nil {
-						rejector <- err
-						return
-					}
-					output = append(output, v)
-				}
-			}
-			resolver <- output
-		}()
-		return resolver, rejector
-	}
-
-	// a so called short running function can only check the context once at the start
-	// so if this function has already started and the cancel function is invoked
-	// it will have to run to completion, unless of course main() exits.
-	func shortRunningAsyncWithContext(ctx context.Context, bar <-chan string) (<-chan string, <-chan error) {
-		resolver := make(chan []string, 1)
-		rejector := make(chan error, 1)
-		go func() {
-			select {
-			case <-ctx.Done():
+	func fooAsync(bar *task.Task) *task.Task {
+		return task.New(func(t *task.Internal){
+			// normally you would call this at the start of any long running loop
+			if t.ShouldStop() {
 				return
-			default:
-				v, err := doSomething(b)
-				if err != nil {
-					rejector <- err
-				} else {
-					resolver <- v
-				}
 			}
-		}()
-		return resolver, rejector
+
+			res, err := bar.Result()
+			if err != nil {
+				t.Reject(e) // or you could do something based on the error
+				return
+			}
+
+			v, err := intToString(res.(int))
+			if err != nil {
+				t.Reject(e)
+			} else {
+				t.Resolve(v)
+			}
+		})
 	}
 
-	func main() {
-		ctx, cancel := context.WithCancel(context.Background())
-		resolver1, rejector1 := longRunningAsyncWithContext(ctx, ch.MakeStringSlice([]string{"a","b","c"}))
-		resolver2, rejector2 := shortRunningAsyncWithContext(ctx, ch.MakeString("a"))
+	t := fooAsync(task.Resolved(1))
+	v, err := t.Result()
+	castedV := v.(string)
 
-		select {
-		case <-await.AllAsync(resolver1, resolver2):
-		case err := <-await.AnyErrorAsync(rejector1, rejector2):
-			cancel()
-		}
-	}
+The Await API
 
-Using Genny to generate helpers for your own types
+Tasks can be awaited using https://github.com/brad-jones/goasync/await
 
-Genny (https://github.com/cheekybits/genny) is a code-generation generics solution.
-This library uses it to generate all the type safe variations of our helpers.
-If you wanted to generate your own custom helpers you might do something like:
+	values, errors := await.All(task1, task2, task3)
+	values, error := await.AllOrError(task1, task2, task3)
+	value, error := await.Any(task1, task2, task3)
 
-	go get -u github.com/cheekybits/genny && \
-	curl -sL "https://github.com/brad-jones/goasync/raw/master/await/generic.genny" | \
-	genny -pkg="mypkg" gen "Awaitable=*MyType" > ./awaiters-mytype.go
+The awaiters that return early (before all tasks are complete) such as Any will
+cooperatively stop the remaining tasks. So cancelation will happen automatically.
+If you do not care for cancelation and wish to have the awaiter return as soon
+as possible you may uses the `Fast` awaiters.
+
+`Fast` awaiters will still ask any remaining tasks to
+cooperatively stop but they do so asynchronously.
+
+	value, error := await.FastAny(task1, task2, task3)
+
+Or perhaps you might like to use a timeout.
+
+	value, error := await.AnyWithTimeout(5 * time.Second, task1, task2, task3)
+
+Not Type Safe
+
+Due to go's lack of generics the only sane why this package can be created is
+by the use of the `interface{}` type. This means that all values that are
+returned from a task's `Result()` method or an awaiter must be casted correctly
+by the caller.
 */
 package goasync
