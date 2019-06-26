@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/brad-jones/goasync/stop"
+	"github.com/brad-jones/goerr"
 	"github.com/go-errors/errors"
 )
 
@@ -38,6 +39,13 @@ func All(awaitables ...Awaitable) ([]interface{}, error) {
 	}
 
 	return awaited, nil
+}
+
+// MustAll does the same thing as All but panics if an error is encountered
+func MustAll(awaitables ...Awaitable) []interface{} {
+	v, e := All(awaitables...)
+	goerr.Check(e)
+	return v
 }
 
 // AllOrError will wait for every given task to emit a result or
@@ -74,6 +82,13 @@ func AllOrError(awaitables ...Awaitable) ([]interface{}, error) {
 	}
 }
 
+// MustAllOrError does the same thing as AllOrError but panics if an error is encountered
+func MustAllOrError(awaitables ...Awaitable) []interface{} {
+	v, e := AllOrError(awaitables...)
+	goerr.Check(e)
+	return v
+}
+
 // AllOrErrorWithTimeout does the same as AllOrError but allows you to set a
 // timeout for waiting for other tasks to stop.
 func AllOrErrorWithTimeout(timeout time.Duration, awaitables ...Awaitable) ([]interface{}, error) {
@@ -106,6 +121,13 @@ func AllOrErrorWithTimeout(timeout time.Duration, awaitables ...Awaitable) ([]in
 			}
 		}
 	}
+}
+
+// MustAllOrErrorWithTimeout does the same thing as AllOrErrorWithTimeout but panics if an error is encountered
+func MustAllOrErrorWithTimeout(timeout time.Duration, awaitables ...Awaitable) []interface{} {
+	v, e := AllOrErrorWithTimeout(timeout, awaitables...)
+	goerr.Check(e)
+	return v
 }
 
 // FastAllOrError does the same as AllOrError but does not wait for all other
@@ -142,6 +164,13 @@ func FastAllOrError(awaitables ...Awaitable) ([]interface{}, error) {
 	}
 }
 
+// MustFastAllOrError does the same thing as FastAllOrError but panics if an error is encountered
+func MustFastAllOrError(awaitables ...Awaitable) []interface{} {
+	v, e := FastAllOrError(awaitables...)
+	goerr.Check(e)
+	return v
+}
+
 // Any will wait for the first task to emit a result (or an error)
 // and return that, stopping all other tasks.
 func Any(awaitables ...Awaitable) (interface{}, error) {
@@ -167,6 +196,13 @@ func Any(awaitables ...Awaitable) (interface{}, error) {
 	case e := <-errCh:
 		return nil, errors.Wrap(e, 0)
 	}
+}
+
+// MustAny does the same thing as Any but panics if an error is encountered
+func MustAny(awaitables ...Awaitable) interface{} {
+	v, e := Any(awaitables...)
+	goerr.Check(e)
+	return v
 }
 
 // AnyWithTimeout does the same as Any but allows you to set a
@@ -196,6 +232,13 @@ func AnyWithTimeout(timeout time.Duration, awaitables ...Awaitable) (interface{}
 	}
 }
 
+// MustAnyWithTimeout does the same thing as AnyWithTimeout but panics if an error is encountered
+func MustAnyWithTimeout(timeout time.Duration, awaitables ...Awaitable) interface{} {
+	v, e := AnyWithTimeout(timeout, awaitables...)
+	goerr.Check(e)
+	return v
+}
+
 // FastAny does the same as Any but does not wait for all other tasks to stop,
 // it does tell them to stop it just doesn't wait for them to stop.
 func FastAny(awaitables ...Awaitable) (interface{}, error) {
@@ -221,6 +264,13 @@ func FastAny(awaitables ...Awaitable) (interface{}, error) {
 	case e := <-errCh:
 		return nil, errors.Wrap(e, 0)
 	}
+}
+
+// MustFastAny does the same thing as FastAny but panics if an error is encountered
+func MustFastAny(awaitables ...Awaitable) interface{} {
+	v, e := FastAny(awaitables...)
+	goerr.Check(e)
+	return v
 }
 
 // ErrTaskFailed is returned by the All methods when at least one task returns an error.
