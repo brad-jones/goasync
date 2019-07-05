@@ -6,6 +6,7 @@ Find main reference documentation at https://godoc.org/github.com/brad-jones/goa
 package task
 
 import (
+	"context"
 	"time"
 
 	"github.com/brad-jones/goerr"
@@ -31,7 +32,7 @@ type Task struct {
 
 	// Used internally to track when the task has actually finished
 	// regardless of what has or hasn't been resolved/rejected.
-	done chan struct{}
+	done *chan struct{}
 
 	// We keep a copy of the value for use with Result()
 	value interface{}
@@ -44,7 +45,7 @@ type Task struct {
 func (t *Task) Stop() {
 	defer func() { recover() }()
 	close(*t.Stopper)
-	<-t.done
+	<-*t.done
 }
 
 // StopWithTimeout will stop the task cooperatively but return an error if
@@ -55,7 +56,7 @@ func (t *Task) StopWithTimeout(timeout time.Duration) error {
 	close(*t.Stopper)
 
 	select {
-	case <-t.done:
+	case <-*t.done:
 		return nil
 	case <-time.After(timeout):
 		return errors.New(&ErrStoppingTaskTimeout{})
@@ -75,7 +76,7 @@ func (e *ErrStoppingTaskTimeout) Error() string {
 // (or rejected) values. This can be called many times over and the same
 // values will be returned.
 func (t *Task) Result() (interface{}, error) {
-	<-t.done
+	<-*t.done
 	return t.value, t.err
 }
 
@@ -102,6 +103,10 @@ type Internal struct {
 	// stopped cooperatively from the outside. If this channel is closed
 	// you should stop your task.
 	Stopper *chan struct{}
+
+	// Used internally to track when the task has actually finished
+	// regardless of what has or hasn't been resolved/rejected.
+	done *chan struct{}
 }
 
 // Resolve is a simple function that sends the provided value to the resolver channel.
@@ -124,6 +129,20 @@ func (i *Internal) ShouldStop() bool {
 	}
 }
 
+// CancelableCtx returns a context object that will be canceled if this task is
+// told to stop, this is useful for integrating with more traditional go code.
+func (i *Internal) CancelableCtx() context.Context {
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		select {
+		case <-*i.done:
+		case <-*i.Stopper:
+			cancel()
+		}
+	}()
+	return ctx
+}
+
 // New creates new instances of Task.
 func New(fn func(t *Internal)) *Task {
 	// Spin up some channels
@@ -139,7 +158,7 @@ func New(fn func(t *Internal)) *Task {
 		Resolver: tResolver,
 		Rejector: tRejector,
 		Stopper:  &stopper,
-		done:     done,
+		done:     &done,
 	}
 
 	// Execute the task asynchronously
@@ -158,6 +177,7 @@ func New(fn func(t *Internal)) *Task {
 			Resolver: tiResolver,
 			Rejector: tiRejector,
 			Stopper:  &stopper,
+			done:     &done,
 		})
 
 		// Read the result in a non blocking manner. Keep in mind not every task
@@ -189,7 +209,7 @@ func Resolved(v interface{}) *Task {
 		Resolver: resolver,
 		Rejector: rejector,
 		Stopper:  &done,
-		done:     done,
+		done:     &done,
 	}
 }
 
@@ -204,6 +224,6 @@ func Rejected(e error) *Task {
 		Resolver: resolver,
 		Rejector: rejector,
 		Stopper:  &done,
-		done:     done,
+		done:     &done,
 	}
 }
