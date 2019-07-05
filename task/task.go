@@ -49,7 +49,7 @@ func (t *Task) Stop() {
 }
 
 // StopWithTimeout will stop the task cooperatively but return an error if
-// a timeout is reached. Use this to ensure your application dopes not
+// a timeout is reached. Use this to ensure your application does not
 // hang indefinitely.
 func (t *Task) StopWithTimeout(timeout time.Duration) error {
 	defer func() { recover() }()
