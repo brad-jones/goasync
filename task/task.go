@@ -72,6 +72,15 @@ func (e *ErrStoppingTaskTimeout) Error() string {
 	return "task: stopping task took too long to stop"
 }
 
+// ErrResultTimeout is returned by ResultWithTimeout when the given runtime
+// duration has passed and the task has succesfully stopped.
+type ErrResultTimeout struct {
+}
+
+func (e *ErrResultTimeout) Error() string {
+	return "task: result took too long to be returned"
+}
+
 // Result waits for the task to complete and then returns any resolved
 // (or rejected) values. This can be called many times over and the same
 // values will be returned.
@@ -83,6 +92,29 @@ func (t *Task) Result() (interface{}, error) {
 // MustResult does the same as Result() but panics if an error was rejected.
 func (t *Task) MustResult() interface{} {
 	v, e := t.Result()
+	goerr.Check(e)
+	return v
+}
+
+// ResultWithTimeout takes 2 duration values, the first is the amount of time
+// we will wait for the task to complete, if that time passes we will then call
+// `StopWithTimeout` which will wait for the second duration for the given task
+// to cooperatively stop.
+func (t *Task) ResultWithTimeout(runtime, stoptime time.Duration) (interface{}, error) {
+	select {
+	case <-*t.done:
+		return t.value, t.err
+	case <-time.After(runtime):
+		if err := t.StopWithTimeout(stoptime); err != nil {
+			return nil, errors.Wrap(err, 0)
+		}
+		return nil, errors.New(&ErrResultTimeout{})
+	}
+}
+
+// MustResultWithTimeout does the same as ResultWithTimeout() but panics if an error was encountered.
+func (t *Task) MustResultWithTimeout(runtime, stoptime time.Duration) interface{} {
+	v, e := t.ResultWithTimeout(runtime, stoptime)
 	goerr.Check(e)
 	return v
 }
