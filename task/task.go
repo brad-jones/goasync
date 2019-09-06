@@ -72,15 +72,6 @@ func (e *ErrStoppingTaskTimeout) Error() string {
 	return "task: stopping task took too long to stop"
 }
 
-// ErrResultTimeout is returned by ResultWithTimeout when the given runtime
-// duration has passed and the task has succesfully stopped.
-type ErrResultTimeout struct {
-}
-
-func (e *ErrResultTimeout) Error() string {
-	return "task: result took too long to be returned"
-}
-
 // Result waits for the task to complete and then returns any resolved
 // (or rejected) values. This can be called many times over and the same
 // values will be returned.
@@ -106,9 +97,9 @@ func (t *Task) ResultWithTimeout(runtime, stoptime time.Duration) (interface{}, 
 		return t.value, t.err
 	case <-time.After(runtime):
 		if err := t.StopWithTimeout(stoptime); err != nil {
-			return nil, errors.Wrap(err, 0)
+			return nil, errors.WrapPrefix(err, "result took too long to be returned and failed to stop in a timely manner", 0)
 		}
-		return nil, errors.New(&ErrResultTimeout{})
+		return nil, errors.WrapPrefix(t.err, "result took too long to be returned", 0)
 	}
 }
 
