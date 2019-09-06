@@ -6,6 +6,7 @@ import (
 
 	"github.com/brad-jones/goasync/await"
 	"github.com/brad-jones/goasync/task"
+	"github.com/go-errors/errors"
 	uuid "github.com/satori/go.uuid"
 )
 
@@ -31,6 +32,36 @@ func sayHelloAsync(greeting *task.Task) *task.Task {
 	})
 }
 
+func cancelableAsync() *task.Task {
+	return task.New(func(t *task.Internal) {
+		chainedTask := chainedCancelableAsync()
+		chainedTask.Stopper = t.Stopper
+		for i := 1; i < 5; i++ {
+			if t.ShouldStop() {
+				t.Reject(errors.New("cancelableAsync: got told to stop, couldnt complete my job"))
+				return
+			}
+			fmt.Println("cancelableAsync: running for the", i, "time")
+			time.Sleep(1 * time.Second)
+		}
+		t.Resolve("cancelableAsync: finished work")
+	})
+}
+
+func chainedCancelableAsync() *task.Task {
+	return task.New(func(t *task.Internal) {
+		for i := 1; i < 5; i++ {
+			if t.ShouldStop() {
+				fmt.Println("chainedCancelableAsync: I stopped too")
+				return
+			}
+			fmt.Println("chainedCancelableAsync: running for the", i, "time")
+			time.Sleep(1 * time.Second)
+		}
+		t.Resolve("chainedCancelableAsync: finished work")
+	})
+}
+
 func main() {
 	start := time.Now()
 	fmt.Println("START", start)
@@ -51,6 +82,13 @@ func main() {
 
 	for _, greeting := range greetings {
 		fmt.Println(greeting)
+	}
+
+	res, err := cancelableAsync().ResultWithTimeout(2*time.Second, 1*time.Second)
+	if err == nil {
+		fmt.Println(res)
+	} else {
+		fmt.Println(err)
 	}
 
 	fmt.Println("END", time.Since(start))

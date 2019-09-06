@@ -199,7 +199,7 @@ func New(fn func(t *Internal)) *Task {
 		fn(&Internal{
 			Resolver: tiResolver,
 			Rejector: tiRejector,
-			Stopper:  &stopper,
+			Stopper:  t.Stopper,
 			done:     &done,
 		})
 
