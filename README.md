@@ -1,7 +1,7 @@
 # goasync
 
 [![GoReport](https://goreportcard.com/badge/brad-jones/goasync)](https://goreportcard.com/report/brad-jones/goasync)
-[![GoLang](https://img.shields.io/badge/golang-%3E%3D%201.12.6-lightblue.svg)](https://golang.org)
+[![GoLang](https://img.shields.io/badge/golang-%3E%3D%201.13.4-lightblue.svg)](https://golang.org)
 [![GoDoc](https://godoc.org/github.com/brad-jones/goasync?status.svg)](https://godoc.org/github.com/brad-jones/goasync)
 [![License](https://img.shields.io/github/license/brad-jones/goasync.svg)](https://github.com/brad-jones/goasync/blob/master/LICENSE)
 
