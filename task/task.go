@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/brad-jones/goerr"
-	"github.com/go-errors/errors"
 )
 
 // Task represents an asynchronous operation, create new instances with New.
@@ -59,7 +58,7 @@ func (t *Task) StopWithTimeout(timeout time.Duration) error {
 	case <-*t.done:
 		return nil
 	case <-time.After(timeout):
-		return errors.New(&ErrStoppingTaskTimeout{})
+		return goerr.Wrap(&ErrStoppingTaskTimeout{})
 	}
 }
 
@@ -97,9 +96,9 @@ func (t *Task) ResultWithTimeout(runtime, stoptime time.Duration) (interface{}, 
 		return t.value, t.err
 	case <-time.After(runtime):
 		if err := t.StopWithTimeout(stoptime); err != nil {
-			return nil, errors.WrapPrefix(err, "result took too long to be returned and failed to stop in a timely manner", 0)
+			return nil, goerr.WrapPrefix(err, "result took too long to be returned and failed to stop in a timely manner")
 		}
-		return nil, errors.WrapPrefix(t.err, "result took too long to be returned", 0)
+		return nil, goerr.WrapPrefix(t.err, "result took too long to be returned")
 	}
 }
 
@@ -139,7 +138,7 @@ func (i *Internal) Resolve(v interface{}) {
 
 // Reject is a simple function that sends the provided error to the rejector channel.
 func (i *Internal) Reject(e error) {
-	i.Rejector <- errors.Wrap(e, 1)
+	i.Rejector <- goerr.Wrap(e)
 }
 
 // ShouldStop is a non blocking method that informs your task if it should stop.

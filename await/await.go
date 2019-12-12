@@ -10,7 +10,6 @@ import (
 
 	"github.com/brad-jones/goasync/stop"
 	"github.com/brad-jones/goerr"
-	"github.com/go-errors/errors"
 )
 
 // Awaitable refers to any type that has a Result() method
@@ -27,13 +26,13 @@ func All(awaitables ...Awaitable) ([]interface{}, error) {
 	for _, awaitable := range awaitables {
 		v, e := awaitable.Result()
 		if e != nil {
-			awaitedErrors = append(awaitedErrors, errors.Wrap(e, 0))
+			awaitedErrors = append(awaitedErrors, goerr.Wrap(e))
 		}
 		awaited = append(awaited, v)
 	}
 
 	if len(awaitedErrors) > 0 {
-		return nil, errors.New(&ErrTaskFailed{
+		return nil, goerr.Wrap(&ErrTaskFailed{
 			Errors: awaitedErrors,
 		})
 	}
@@ -61,7 +60,7 @@ func AllOrError(awaitables ...Awaitable) ([]interface{}, error) {
 		go func() {
 			v, err := awaitable.Result()
 			if err != nil {
-				errCh <- errors.Wrap(err, 0)
+				errCh <- goerr.Wrap(err)
 				return
 			}
 			valueCh <- v
@@ -72,7 +71,7 @@ func AllOrError(awaitables ...Awaitable) ([]interface{}, error) {
 	for {
 		select {
 		case err := <-errCh:
-			return nil, errors.Wrap(err, 0)
+			return nil, goerr.Wrap(err)
 		case value := <-valueCh:
 			values = append(values, value)
 			if len(values) == len(awaitables) {
@@ -102,7 +101,7 @@ func AllOrErrorWithTimeout(timeout time.Duration, awaitables ...Awaitable) ([]in
 		go func() {
 			v, err := awaitable.Result()
 			if err != nil {
-				errCh <- errors.Wrap(err, 0)
+				errCh <- goerr.Wrap(err)
 				return
 			}
 			valueCh <- v
@@ -113,7 +112,7 @@ func AllOrErrorWithTimeout(timeout time.Duration, awaitables ...Awaitable) ([]in
 	for {
 		select {
 		case err := <-errCh:
-			return nil, errors.Wrap(err, 0)
+			return nil, goerr.Wrap(err)
 		case value := <-valueCh:
 			values = append(values, value)
 			if len(values) == len(awaitables) {
@@ -143,7 +142,7 @@ func FastAllOrError(awaitables ...Awaitable) ([]interface{}, error) {
 		go func() {
 			v, err := awaitable.Result()
 			if err != nil {
-				errCh <- errors.Wrap(err, 0)
+				errCh <- goerr.Wrap(err)
 				return
 			}
 			valueCh <- v
@@ -154,7 +153,7 @@ func FastAllOrError(awaitables ...Awaitable) ([]interface{}, error) {
 	for {
 		select {
 		case err := <-errCh:
-			return nil, errors.Wrap(err, 0)
+			return nil, goerr.Wrap(err)
 		case value := <-valueCh:
 			values = append(values, value)
 			if len(values) == len(awaitables) {
@@ -184,7 +183,7 @@ func Any(awaitables ...Awaitable) (interface{}, error) {
 		go func() {
 			v, e := awaitable.Result()
 			if e != nil {
-				errCh <- errors.Wrap(e, 0)
+				errCh <- goerr.Wrap(e)
 			}
 			valueCh <- v
 		}()
@@ -194,7 +193,7 @@ func Any(awaitables ...Awaitable) (interface{}, error) {
 	case v := <-valueCh:
 		return v, nil
 	case e := <-errCh:
-		return nil, errors.Wrap(e, 0)
+		return nil, goerr.Wrap(e)
 	}
 }
 
@@ -218,7 +217,7 @@ func AnyWithTimeout(timeout time.Duration, awaitables ...Awaitable) (interface{}
 		go func() {
 			v, e := awaitable.Result()
 			if e != nil {
-				errCh <- errors.Wrap(e, 0)
+				errCh <- goerr.Wrap(e)
 			}
 			valueCh <- v
 		}()
@@ -228,7 +227,7 @@ func AnyWithTimeout(timeout time.Duration, awaitables ...Awaitable) (interface{}
 	case v := <-valueCh:
 		return v, nil
 	case e := <-errCh:
-		return nil, errors.Wrap(e, 0)
+		return nil, goerr.Wrap(e)
 	}
 }
 
@@ -252,7 +251,7 @@ func FastAny(awaitables ...Awaitable) (interface{}, error) {
 		go func() {
 			v, e := awaitable.Result()
 			if e != nil {
-				errCh <- errors.Wrap(e, 0)
+				errCh <- goerr.Wrap(e)
 			}
 			valueCh <- v
 		}()
@@ -262,7 +261,7 @@ func FastAny(awaitables ...Awaitable) (interface{}, error) {
 	case v := <-valueCh:
 		return v, nil
 	case e := <-errCh:
-		return nil, errors.Wrap(e, 0)
+		return nil, goerr.Wrap(e)
 	}
 }
 

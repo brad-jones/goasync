@@ -6,7 +6,7 @@ import (
 
 	"github.com/brad-jones/goasync/await"
 	"github.com/brad-jones/goasync/task"
-	"github.com/go-errors/errors"
+	"github.com/brad-jones/goerr"
 	uuid "github.com/satori/go.uuid"
 )
 
@@ -38,7 +38,7 @@ func cancelableAsync() *task.Task {
 		chainedTask.Stopper = t.Stopper
 		for i := 1; i < 5; i++ {
 			if t.ShouldStop() {
-				t.Reject(errors.New("cancelableAsync: got told to stop, couldnt complete my job"))
+				t.Reject(goerr.Errorf("cancelableAsync: got told to stop, couldnt complete my job"))
 				return
 			}
 			fmt.Println("cancelableAsync: running for the", i, "time")

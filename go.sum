@@ -1,5 +1,5 @@
-github.com/brad-jones/goerr v0.0.0-20190620043302-e702e0f33115 h1:6JJZiJDI28OcAXXDnJlIlQdFyHFSr4Io9hop4JneykQ=
-github.com/brad-jones/goerr v0.0.0-20190620043302-e702e0f33115/go.mod h1:sUaCAPOAukQBOrbInIPsANqA/MWQ87RDZlTuQUowgds=
+github.com/brad-jones/goerr v0.0.0-20191212045712-8f2b09c286c0 h1:/Kli5ZVsUm0dZ/IzGK/Y405TwxDRsRe4GXK2E9jZCnM=
+github.com/brad-jones/goerr v0.0.0-20191212045712-8f2b09c286c0/go.mod h1:sUaCAPOAukQBOrbInIPsANqA/MWQ87RDZlTuQUowgds=
 github.com/go-errors/errors v1.0.1 h1:LUHzmkK3GUKUrL/1gfBUxAHzcev3apQlezX/+O7ma6w=
 github.com/go-errors/errors v1.0.1/go.mod h1:f4zRHt4oKfwPJE5k8C9vpYG+aDHdBFUsgrm6/TyX73Q=
 github.com/go-log/log v0.1.0 h1:wudGTNsiGzrD5ZjgIkVZ517ugi2XRe9Q/xRCzwEO4/U=
