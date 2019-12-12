@@ -39,7 +39,20 @@ the results of that function call, including any error handling strategy and at
 the very least some sort of method of ensuring it actually runs to completion
 not to mention cancelation.
 
-This is what I consider to be the basic async function:
+What is a pipeline?
+
+"Informally, a pipeline is a series of stages connected by channels,
+where each stage is a group of goroutines running the same function."
+
+https://blog.golang.org/pipelines
+
+If you are writting some sort of server/service (which is what go is really
+awesome at doing) where you might have the same async pipeline run per request.
+Then you can construct all of this once and it's not really a major issue.
+
+But when you need to create many different pipelines, or pipelines that have a
+stage that run many different functions in goroutines then a different solution
+is required. This is what I consider to be the basic async function:
 
 	func fooAsync(bar <-chan string) (<-chan string, <-chan error) {
 		resolver := make(chan string, 1)
@@ -111,12 +124,13 @@ Adding Cancelation
 		return resolver, rejector, stopper
 	}
 
-* So we just written 24 lines of code and only one of them actually does anything
-of any importance.
+* So we have just written 24 lines of code and only one of them actually does
+anything of any importance.
 
 * While there are some cases where having the resolver, rejector & stopper
-separate it gets hard to keep track with many variables. What if fooAsync
-above wanted to see the error of bar, you would have to pass that in too.
+separate makes sense more often than not it gets hard to keep track of the
+pipeline with so many variables. What if fooAsync above wanted to see the error
+of bar, you would have to pass that in too.
 
 * Why not use context.Context? Plenty of reading about that
 https://dave.cheney.net/2017/08/20/context-isnt-for-cancellation
