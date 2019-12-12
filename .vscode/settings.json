@@ -1,12 +1,29 @@
 {
-    "cSpell.words": [
-        "Bools",
-        "Genny",
-        "Println",
-        "mypkg",
-        "mytype"
-    ],
-    "files.associations": {
-        "*.genny": "go"
-    }
+	// Configure the golang extension to use "gopls"
+	// see: https://github.com/golang/tools/blob/master/gopls/doc/vscode.md
+	"go.useLanguageServer": true,
+	"[go]": {
+		"editor.snippetSuggestions": "none",
+		"editor.codeActionsOnSave": {
+			"source.organizeImports": true
+		}
+	},
+	"gopls": {
+		"usePlaceholders": true,
+		"completeUnimported": true,
+		"watchFileChanges": true,
+		"deepCompletion": true
+	},
+	
+	"cSpell.words": [
+		"Bools",
+		"Genny",
+		"Println",
+		"mypkg",
+		"mytype"
+	],
+	
+	"files.associations": {
+		"*.genny": "go"
+	}
 }
