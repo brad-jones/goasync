@@ -3,11 +3,6 @@ Package goasync is a helper framework for writing asynchronous code in go.
 It's primary goal is to reduce the amount of boilier plate code one has to
 write to do concurrent tasks.
 
-Preface: My ideas presented here may not necessarily be theoretically perfect
-but I am taking a pragmatic approach to my development of golang code, while at
-the same time keeping in mind that go is go and not another language... go is
-verbose suck it up and move on.
-
 TLDR: Don't care about my journey through golang's concurrency model,
 just want to know how this library works, skip down to The Task API.
 

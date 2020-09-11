@@ -1,15 +1,11 @@
-/*
-Package task is a asynchronous utility inspired by JS Promises & C# Tasks.
-
-Find main reference documentation at https://godoc.org/github.com/brad-jones/goasync
-*/
+// Package task is a asynchronous utility inspired by JS Promises & C# Tasks.
 package task
 
 import (
 	"context"
 	"time"
 
-	"github.com/brad-jones/goerr"
+	"github.com/brad-jones/goerr/v2"
 )
 
 // Task represents an asynchronous operation, create new instances with New.
@@ -96,9 +92,9 @@ func (t *Task) ResultWithTimeout(runtime, stoptime time.Duration) (interface{}, 
 		return t.value, t.err
 	case <-time.After(runtime):
 		if err := t.StopWithTimeout(stoptime); err != nil {
-			return nil, goerr.WrapPrefix(err, "result took too long to be returned and failed to stop in a timely manner")
+			return nil, goerr.Wrap(err, "result took too long to be returned and failed to stop in a timely manner")
 		}
-		return nil, goerr.WrapPrefix(t.err, "result took too long to be returned")
+		return nil, goerr.Wrap(t.err, "result took too long to be returned")
 	}
 }
 
@@ -137,8 +133,8 @@ func (i *Internal) Resolve(v interface{}) {
 }
 
 // Reject is a simple function that sends the provided error to the rejector channel.
-func (i *Internal) Reject(e error) {
-	i.Rejector <- goerr.Wrap(e)
+func (i *Internal) Reject(err interface{}, messages ...string) {
+	i.Rejector <- goerr.Trace(1, err, messages...)
 }
 
 // ShouldStop is a non blocking method that informs your task if it should stop.
@@ -190,7 +186,7 @@ func New(fn func(t *Internal)) *Task {
 
 		// Catch any panics and reject them
 		defer goerr.Handle(func(e error) {
-			t.err = e
+			t.err = goerr.Trace(3, e)
 			tRejector <- t.err
 		})
 

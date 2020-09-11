@@ -1,15 +1,11 @@
-/*
-Package await contains await helper functions for use with tasks.
-
-Find main reference documentation at https://godoc.org/github.com/brad-jones/goasync
-*/
+// Package await contains await helper functions for use with tasks.
 package await
 
 import (
 	"time"
 
-	"github.com/brad-jones/goasync/stop"
-	"github.com/brad-jones/goerr"
+	"github.com/brad-jones/goasync/v2/stop"
+	"github.com/brad-jones/goerr/v2"
 )
 
 // Awaitable refers to any type that has a Result() method
@@ -53,7 +49,7 @@ func AllOrError(awaitables ...Awaitable) ([]interface{}, error) {
 	defer stop.All(awaitableToStopable(awaitables...)...)
 
 	errCh := make(chan error, 1)
-	valueCh := make(chan interface{}, 1)
+	valueCh := make(chan map[Awaitable]interface{}, 1)
 
 	for _, v := range awaitables {
 		awaitable := v
@@ -63,19 +59,27 @@ func AllOrError(awaitables ...Awaitable) ([]interface{}, error) {
 				errCh <- goerr.Wrap(err)
 				return
 			}
-			valueCh <- v
+			valueCh <- map[Awaitable]interface{}{
+				awaitable: v,
+			}
 		}()
 	}
 
-	values := []interface{}{}
+	values := map[Awaitable]interface{}{}
 	for {
 		select {
 		case err := <-errCh:
 			return nil, goerr.Wrap(err)
 		case value := <-valueCh:
-			values = append(values, value)
+			for k, v := range value {
+				values[k] = v
+			}
 			if len(values) == len(awaitables) {
-				return values, nil
+				sortedValues := []interface{}{}
+				for _, awaitable := range awaitables {
+					sortedValues = append(sortedValues, values[awaitable])
+				}
+				return sortedValues, nil
 			}
 		}
 	}
@@ -94,7 +98,7 @@ func AllOrErrorWithTimeout(timeout time.Duration, awaitables ...Awaitable) ([]in
 	defer stop.AllWithTimeout(timeout, awaitableToStopableWithTimeout(awaitables...)...)
 
 	errCh := make(chan error, 1)
-	valueCh := make(chan interface{}, 1)
+	valueCh := make(chan map[Awaitable]interface{}, 1)
 
 	for _, v := range awaitables {
 		awaitable := v
@@ -104,19 +108,27 @@ func AllOrErrorWithTimeout(timeout time.Duration, awaitables ...Awaitable) ([]in
 				errCh <- goerr.Wrap(err)
 				return
 			}
-			valueCh <- v
+			valueCh <- map[Awaitable]interface{}{
+				awaitable: v,
+			}
 		}()
 	}
 
-	values := []interface{}{}
+	values := map[Awaitable]interface{}{}
 	for {
 		select {
 		case err := <-errCh:
 			return nil, goerr.Wrap(err)
 		case value := <-valueCh:
-			values = append(values, value)
+			for k, v := range value {
+				values[k] = v
+			}
 			if len(values) == len(awaitables) {
-				return values, nil
+				sortedValues := []interface{}{}
+				for _, awaitable := range awaitables {
+					sortedValues = append(sortedValues, values[awaitable])
+				}
+				return sortedValues, nil
 			}
 		}
 	}
@@ -135,7 +147,7 @@ func FastAllOrError(awaitables ...Awaitable) ([]interface{}, error) {
 	defer stop.AllAsync(awaitableToStopable(awaitables...)...)
 
 	errCh := make(chan error, 1)
-	valueCh := make(chan interface{}, 1)
+	valueCh := make(chan map[Awaitable]interface{}, 1)
 
 	for _, v := range awaitables {
 		awaitable := v
@@ -145,19 +157,27 @@ func FastAllOrError(awaitables ...Awaitable) ([]interface{}, error) {
 				errCh <- goerr.Wrap(err)
 				return
 			}
-			valueCh <- v
+			valueCh <- map[Awaitable]interface{}{
+				awaitable: v,
+			}
 		}()
 	}
 
-	values := []interface{}{}
+	values := map[Awaitable]interface{}{}
 	for {
 		select {
 		case err := <-errCh:
 			return nil, goerr.Wrap(err)
 		case value := <-valueCh:
-			values = append(values, value)
+			for k, v := range value {
+				values[k] = v
+			}
 			if len(values) == len(awaitables) {
-				return values, nil
+				sortedValues := []interface{}{}
+				for _, awaitable := range awaitables {
+					sortedValues = append(sortedValues, values[awaitable])
+				}
+				return sortedValues, nil
 			}
 		}
 	}

@@ -3,27 +3,28 @@
 	// see: https://github.com/golang/tools/blob/master/gopls/doc/vscode.md
 	"go.useLanguageServer": true,
 	"[go]": {
-		"editor.snippetSuggestions": "none",
+		"editor.formatOnSave": true,
 		"editor.codeActionsOnSave": {
-			"source.organizeImports": true
-		}
+			"source.organizeImports": true,
+		},
+		"editor.snippetSuggestions": "none",
+	},
+	"[go.mod]": {
+		"editor.formatOnSave": true,
+		"editor.codeActionsOnSave": {
+			"source.organizeImports": true,
+		},
 	},
 	"gopls": {
 		"usePlaceholders": true,
-		"completeUnimported": true,
-		"watchFileChanges": true,
-		"deepCompletion": true
+		"staticcheck": false,
 	},
-	
 	"cSpell.words": [
 		"Bools",
 		"Genny",
 		"Println",
+		"TLDR",
 		"mypkg",
 		"mytype"
-	],
-	
-	"files.associations": {
-		"*.genny": "go"
-	}
+	]
 }
