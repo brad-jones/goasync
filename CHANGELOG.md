@@ -1,3 +1,22 @@
+# [2.1.0](https://github.com/brad-jones/goasync/compare/v2.0.0...v2.1.0) (2020-09-18)
+
+
+### Bug Fixes
+
+* **await:** ensure we don't have any goroutine leaks ([d0b80ef](https://github.com/brad-jones/goasync/commit/d0b80effe3bea6a80eea4aa7a5c6059c04194ccd))
+
+
+### Features
+
+* **await:** added a Stream() function ([c9a6703](https://github.com/brad-jones/goasync/commit/c9a6703fdb4bd796c3e264bc9b5672b81d58c2eb))
+* **await:** added async versions of all methods ([1de1b5c](https://github.com/brad-jones/goasync/commit/1de1b5cbed1c115a967e7c5a784769c17b2af835))
+* removed our awaitable and stoppable interfaces ([2594a17](https://github.com/brad-jones/goasync/commit/2594a17a0a54adb2a453aa4d31f55c5cca179f9b))
+* **task:** accept func() or func(t *Internal) ([ac21599](https://github.com/brad-jones/goasync/commit/ac215998cbcdf75ec7984fc58440c1b2e4a13f27))
+* **task:** added IsCompleted method ([c7c9bd2](https://github.com/brad-jones/goasync/commit/c7c9bd2b20a2b6539e26336d88e2625b403286ec))
+* **task:** added Then() method ([2fa58e5](https://github.com/brad-jones/goasync/commit/2fa58e51601f127b379ec95859e6c0e089d26f4b))
+* **task:** added Wait() method ([67e30d7](https://github.com/brad-jones/goasync/commit/67e30d7b10700e28678fbeb81f9c0f6faa532f5e))
+* **task:** made the done channel public ([3254147](https://github.com/brad-jones/goasync/commit/3254147abb444bcb2584dcc3b331aa7c8fd0059e))
+
 # [2.0.0](https://github.com/brad-jones/goasync/compare/v1.0.0...v2.0.0) (2020-09-11)
 
 
