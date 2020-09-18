@@ -171,7 +171,8 @@ func (i *Internal) CancelableCtx() context.Context {
 }
 
 // New creates new instances of Task.
-func New(fn func(t *Internal)) *Task {
+// Accepts `func()` or `func(t *Internal)`
+func New(fn interface{}) *Task {
 	// Spin up some channels
 	done := make(chan struct{}, 1)
 	stopper := make(chan struct{}, 1)
@@ -203,12 +204,17 @@ func New(fn func(t *Internal)) *Task {
 		})
 
 		// Execute the task
-		fn(&Internal{
-			Resolver: tiResolver,
-			Rejector: tiRejector,
-			Stopper:  t.Stopper,
-			done:     &done,
-		})
+		switch v := fn.(type) {
+		case func():
+			v()
+		case func(t *Internal):
+			v(&Internal{
+				Resolver: tiResolver,
+				Rejector: tiRejector,
+				Stopper:  t.Stopper,
+				done:     &done,
+			})
+		}
 
 		// Read the result in a non blocking manner. Keep in mind not every task
 		// will actually resolve or reject anything, the simple fact that it is
