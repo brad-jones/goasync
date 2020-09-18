@@ -109,6 +109,25 @@ func (t *Task) MustResultWithTimeout(runtime, stoptime time.Duration) interface{
 	return v
 }
 
+// Then registers a callback to be called when this Task completes.
+// Accepts `func()`, `func(t *Internal)` or `func(result interface{}, t *Internal)`
+func (t *Task) Then(fn interface{}) *Task {
+	t2 := New(func(t2 *Internal) {
+		switch v := fn.(type) {
+		case func():
+			t.MustWait()
+			v()
+		case func(t *Internal):
+			t.MustWait()
+			v(t2)
+		case func(result interface{}, t *Internal):
+			v(t.MustResult(), t2)
+		}
+	})
+	t2.Stopper = t.Stopper
+	return t2
+}
+
 // Wait will block until the task is complete, if the task rejected an error it will be returned
 func (t *Task) Wait() error {
 	<-*t.Done
