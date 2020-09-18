@@ -39,6 +39,13 @@ func MustAll(awaitables ...*task.Task) []interface{} {
 	return v
 }
 
+// AllAsync does the same thing as All but does so asynchronously
+func AllAsync(awaitables ...*task.Task) *task.Task {
+	return task.New(func(t *task.Internal) {
+		t.Resolve(MustAll(awaitables...))
+	})
+}
+
 // AllOrError will wait for every given task to emit a result or
 // return as soon as an error is encountered, stopping all other tasks.
 func AllOrError(awaitables ...*task.Task) ([]interface{}, error) {
@@ -86,6 +93,13 @@ func MustAllOrError(awaitables ...*task.Task) []interface{} {
 	v, e := AllOrError(awaitables...)
 	goerr.Check(e)
 	return v
+}
+
+// AllOrErrorAsync does the same thing as AllOrError but does so asynchronously
+func AllOrErrorAsync(awaitables ...*task.Task) *task.Task {
+	return task.New(func(t *task.Internal) {
+		t.Resolve(MustAllOrError(awaitables...))
+	})
 }
 
 // AllOrErrorWithTimeout does the same as AllOrError but allows you to set a
@@ -137,6 +151,13 @@ func MustAllOrErrorWithTimeout(timeout time.Duration, awaitables ...*task.Task) 
 	return v
 }
 
+// AllOrErrorWithTimeoutAsync does the same thing as AllOrErrorWithTimeout but does so asynchronously
+func AllOrErrorWithTimeoutAsync(timeout time.Duration, awaitables ...*task.Task) *task.Task {
+	return task.New(func(t *task.Internal) {
+		t.Resolve(MustAllOrErrorWithTimeout(timeout, awaitables...))
+	})
+}
+
 // FastAllOrError does the same as AllOrError but does not wait for all other
 // tasks to stop, it does tell them to stop it just doesn't wait for them to stop.
 func FastAllOrError(awaitables ...*task.Task) ([]interface{}, error) {
@@ -186,6 +207,13 @@ func MustFastAllOrError(awaitables ...*task.Task) []interface{} {
 	return v
 }
 
+// FastAllOrErrorAsync does the same thing as FastAllOrError but does so asynchronously
+func FastAllOrErrorAsync(awaitables ...*task.Task) *task.Task {
+	return task.New(func(t *task.Internal) {
+		t.Resolve(MustFastAllOrError(awaitables...))
+	})
+}
+
 // Any will wait for the first task to emit a result (or an error)
 // and return that, stopping all other tasks.
 func Any(awaitables ...*task.Task) (interface{}, error) {
@@ -218,6 +246,13 @@ func MustAny(awaitables ...*task.Task) interface{} {
 	v, e := Any(awaitables...)
 	goerr.Check(e)
 	return v
+}
+
+// AnyAsync does the same thing as Any but does so asynchronously
+func AnyAsync(awaitables ...*task.Task) *task.Task {
+	return task.New(func(t *task.Internal) {
+		t.Resolve(MustAny(awaitables...))
+	})
 }
 
 // AnyWithTimeout does the same as Any but allows you to set a
@@ -254,6 +289,13 @@ func MustAnyWithTimeout(timeout time.Duration, awaitables ...*task.Task) interfa
 	return v
 }
 
+// AnyWithTimeoutAsync does the same thing as AnyWithTimeout but does so asynchronously
+func AnyWithTimeoutAsync(timeout time.Duration, awaitables ...*task.Task) *task.Task {
+	return task.New(func(t *task.Internal) {
+		t.Resolve(MustAnyWithTimeout(timeout, awaitables...))
+	})
+}
+
 // FastAny does the same as Any but does not wait for all other tasks to stop,
 // it does tell them to stop it just doesn't wait for them to stop.
 func FastAny(awaitables ...*task.Task) (interface{}, error) {
@@ -286,6 +328,13 @@ func MustFastAny(awaitables ...*task.Task) interface{} {
 	v, e := FastAny(awaitables...)
 	goerr.Check(e)
 	return v
+}
+
+// FastAnyAsync does the same thing as FastAny but does so asynchronously
+func FastAnyAsync(awaitables ...*task.Task) *task.Task {
+	return task.New(func(t *task.Internal) {
+		t.Resolve(MustFastAny(awaitables...))
+	})
 }
 
 // ErrTaskFailed is returned by the All methods when at least one task returns an error.
