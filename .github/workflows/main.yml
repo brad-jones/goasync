@@ -1,4 +1,8 @@
-on: [push, pull_request]
+on:
+  pull_request:
+  push:
+    branches-ignore:
+      - 'dependabot/**'
 
 env:
   CI: true
@@ -28,6 +32,7 @@ jobs:
   release:
     needs: test
     runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/v2'
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
