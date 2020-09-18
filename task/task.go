@@ -109,6 +109,20 @@ func (t *Task) MustResultWithTimeout(runtime, stoptime time.Duration) interface{
 	return v
 }
 
+// Wait will block until the task is complete, if the task rejected an error it will be returned
+func (t *Task) Wait() error {
+	<-*t.Done
+	if t.err != nil {
+		return goerr.Wrap(t.err)
+	}
+	return nil
+}
+
+// MustWait does the same as Wait but panics if the task rejected an error
+func (t *Task) MustWait() {
+	goerr.Check(t.Wait())
+}
+
 // IsCompleted indicates if the task has finished or not in a non-blocking manner
 func (t *Task) IsCompleted() bool {
 	return t.doneValue
