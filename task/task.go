@@ -30,6 +30,9 @@ type Task struct {
 	// they don't necessarily have to resolve something.
 	Done *chan struct{}
 
+	// This will be set to true when the task has completed
+	doneValue bool
+
 	// We keep a copy of the value for use with Result()
 	value interface{}
 
@@ -104,6 +107,11 @@ func (t *Task) MustResultWithTimeout(runtime, stoptime time.Duration) interface{
 	v, e := t.ResultWithTimeout(runtime, stoptime)
 	goerr.Check(e)
 	return v
+}
+
+// IsCompleted indicates if the task has finished or not in a non-blocking manner
+func (t *Task) IsCompleted() bool {
+	return t.doneValue
 }
 
 // Internal is used by the task implementor.
@@ -183,7 +191,10 @@ func New(fn func(t *Internal)) *Task {
 	// Execute the task asynchronously
 	go func() {
 		// Regardless of what the function does we know that it is done
-		defer close(Done)
+		defer func() {
+			close(done)
+			t.doneValue = true
+		}()
 
 		// Catch any panics and reject them
 		defer goerr.Handle(func(e error) {
