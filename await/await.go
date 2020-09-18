@@ -5,17 +5,13 @@ import (
 	"time"
 
 	"github.com/brad-jones/goasync/v2/stop"
+	"github.com/brad-jones/goasync/v2/task"
 	"github.com/brad-jones/goerr/v2"
 )
 
-// Awaitable refers to any type that has a Result() method
-type Awaitable interface {
-	Result() (interface{}, error)
-}
-
 // All will wait for every given task to emit a result, the results (& errors)
 // will be returned in a slice ordered the same as the input.
-func All(awaitables ...Awaitable) ([]interface{}, error) {
+func All(awaitables ...*task.Task) ([]interface{}, error) {
 	awaited := []interface{}{}
 	awaitedErrors := []error{}
 
@@ -37,7 +33,7 @@ func All(awaitables ...Awaitable) ([]interface{}, error) {
 }
 
 // MustAll does the same thing as All but panics if an error is encountered
-func MustAll(awaitables ...Awaitable) []interface{} {
+func MustAll(awaitables ...*task.Task) []interface{} {
 	v, e := All(awaitables...)
 	goerr.Check(e)
 	return v
@@ -45,11 +41,11 @@ func MustAll(awaitables ...Awaitable) []interface{} {
 
 // AllOrError will wait for every given task to emit a result or
 // return as soon as an error is encountered, stopping all other tasks.
-func AllOrError(awaitables ...Awaitable) ([]interface{}, error) {
-	defer stop.All(awaitableToStopable(awaitables...)...)
+func AllOrError(awaitables ...*task.Task) ([]interface{}, error) {
+	defer stop.All(awaitables...)
 
 	errCh := make(chan error, 1)
-	valueCh := make(chan map[Awaitable]interface{}, 1)
+	valueCh := make(chan map[*task.Task]interface{}, 1)
 
 	for _, v := range awaitables {
 		awaitable := v
@@ -59,13 +55,13 @@ func AllOrError(awaitables ...Awaitable) ([]interface{}, error) {
 				errCh <- goerr.Wrap(err)
 				return
 			}
-			valueCh <- map[Awaitable]interface{}{
+			valueCh <- map[*task.Task]interface{}{
 				awaitable: v,
 			}
 		}()
 	}
 
-	values := map[Awaitable]interface{}{}
+	values := map[*task.Task]interface{}{}
 	for {
 		select {
 		case err := <-errCh:
@@ -86,7 +82,7 @@ func AllOrError(awaitables ...Awaitable) ([]interface{}, error) {
 }
 
 // MustAllOrError does the same thing as AllOrError but panics if an error is encountered
-func MustAllOrError(awaitables ...Awaitable) []interface{} {
+func MustAllOrError(awaitables ...*task.Task) []interface{} {
 	v, e := AllOrError(awaitables...)
 	goerr.Check(e)
 	return v
@@ -94,11 +90,11 @@ func MustAllOrError(awaitables ...Awaitable) []interface{} {
 
 // AllOrErrorWithTimeout does the same as AllOrError but allows you to set a
 // timeout for waiting for other tasks to stop.
-func AllOrErrorWithTimeout(timeout time.Duration, awaitables ...Awaitable) ([]interface{}, error) {
-	defer stop.AllWithTimeout(timeout, awaitableToStopableWithTimeout(awaitables...)...)
+func AllOrErrorWithTimeout(timeout time.Duration, awaitables ...*task.Task) ([]interface{}, error) {
+	defer stop.AllWithTimeout(timeout, awaitables...)
 
 	errCh := make(chan error, 1)
-	valueCh := make(chan map[Awaitable]interface{}, 1)
+	valueCh := make(chan map[*task.Task]interface{}, 1)
 
 	for _, v := range awaitables {
 		awaitable := v
@@ -108,13 +104,13 @@ func AllOrErrorWithTimeout(timeout time.Duration, awaitables ...Awaitable) ([]in
 				errCh <- goerr.Wrap(err)
 				return
 			}
-			valueCh <- map[Awaitable]interface{}{
+			valueCh <- map[*task.Task]interface{}{
 				awaitable: v,
 			}
 		}()
 	}
 
-	values := map[Awaitable]interface{}{}
+	values := map[*task.Task]interface{}{}
 	for {
 		select {
 		case err := <-errCh:
@@ -135,7 +131,7 @@ func AllOrErrorWithTimeout(timeout time.Duration, awaitables ...Awaitable) ([]in
 }
 
 // MustAllOrErrorWithTimeout does the same thing as AllOrErrorWithTimeout but panics if an error is encountered
-func MustAllOrErrorWithTimeout(timeout time.Duration, awaitables ...Awaitable) []interface{} {
+func MustAllOrErrorWithTimeout(timeout time.Duration, awaitables ...*task.Task) []interface{} {
 	v, e := AllOrErrorWithTimeout(timeout, awaitables...)
 	goerr.Check(e)
 	return v
@@ -143,11 +139,11 @@ func MustAllOrErrorWithTimeout(timeout time.Duration, awaitables ...Awaitable) [
 
 // FastAllOrError does the same as AllOrError but does not wait for all other
 // tasks to stop, it does tell them to stop it just doesn't wait for them to stop.
-func FastAllOrError(awaitables ...Awaitable) ([]interface{}, error) {
-	defer stop.AllAsync(awaitableToStopable(awaitables...)...)
+func FastAllOrError(awaitables ...*task.Task) ([]interface{}, error) {
+	defer stop.AllAsync(awaitables...)
 
 	errCh := make(chan error, 1)
-	valueCh := make(chan map[Awaitable]interface{}, 1)
+	valueCh := make(chan map[*task.Task]interface{}, 1)
 
 	for _, v := range awaitables {
 		awaitable := v
@@ -157,13 +153,13 @@ func FastAllOrError(awaitables ...Awaitable) ([]interface{}, error) {
 				errCh <- goerr.Wrap(err)
 				return
 			}
-			valueCh <- map[Awaitable]interface{}{
+			valueCh <- map[*task.Task]interface{}{
 				awaitable: v,
 			}
 		}()
 	}
 
-	values := map[Awaitable]interface{}{}
+	values := map[*task.Task]interface{}{}
 	for {
 		select {
 		case err := <-errCh:
@@ -184,7 +180,7 @@ func FastAllOrError(awaitables ...Awaitable) ([]interface{}, error) {
 }
 
 // MustFastAllOrError does the same thing as FastAllOrError but panics if an error is encountered
-func MustFastAllOrError(awaitables ...Awaitable) []interface{} {
+func MustFastAllOrError(awaitables ...*task.Task) []interface{} {
 	v, e := FastAllOrError(awaitables...)
 	goerr.Check(e)
 	return v
@@ -192,8 +188,8 @@ func MustFastAllOrError(awaitables ...Awaitable) []interface{} {
 
 // Any will wait for the first task to emit a result (or an error)
 // and return that, stopping all other tasks.
-func Any(awaitables ...Awaitable) (interface{}, error) {
-	defer stop.All(awaitableToStopable(awaitables...)...)
+func Any(awaitables ...*task.Task) (interface{}, error) {
+	defer stop.All(awaitables...)
 
 	valueCh := make(chan interface{}, 1)
 	errCh := make(chan error, 1)
@@ -218,7 +214,7 @@ func Any(awaitables ...Awaitable) (interface{}, error) {
 }
 
 // MustAny does the same thing as Any but panics if an error is encountered
-func MustAny(awaitables ...Awaitable) interface{} {
+func MustAny(awaitables ...*task.Task) interface{} {
 	v, e := Any(awaitables...)
 	goerr.Check(e)
 	return v
@@ -226,8 +222,8 @@ func MustAny(awaitables ...Awaitable) interface{} {
 
 // AnyWithTimeout does the same as Any but allows you to set a
 // timeout for waiting for other tasks to stop.
-func AnyWithTimeout(timeout time.Duration, awaitables ...Awaitable) (interface{}, error) {
-	defer stop.AllWithTimeout(timeout, awaitableToStopableWithTimeout(awaitables...)...)
+func AnyWithTimeout(timeout time.Duration, awaitables ...*task.Task) (interface{}, error) {
+	defer stop.AllWithTimeout(timeout, awaitables...)
 
 	valueCh := make(chan interface{}, 1)
 	errCh := make(chan error, 1)
@@ -252,7 +248,7 @@ func AnyWithTimeout(timeout time.Duration, awaitables ...Awaitable) (interface{}
 }
 
 // MustAnyWithTimeout does the same thing as AnyWithTimeout but panics if an error is encountered
-func MustAnyWithTimeout(timeout time.Duration, awaitables ...Awaitable) interface{} {
+func MustAnyWithTimeout(timeout time.Duration, awaitables ...*task.Task) interface{} {
 	v, e := AnyWithTimeout(timeout, awaitables...)
 	goerr.Check(e)
 	return v
@@ -260,8 +256,8 @@ func MustAnyWithTimeout(timeout time.Duration, awaitables ...Awaitable) interfac
 
 // FastAny does the same as Any but does not wait for all other tasks to stop,
 // it does tell them to stop it just doesn't wait for them to stop.
-func FastAny(awaitables ...Awaitable) (interface{}, error) {
-	defer stop.AllAsync(awaitableToStopable(awaitables...)...)
+func FastAny(awaitables ...*task.Task) (interface{}, error) {
+	defer stop.AllAsync(awaitables...)
 
 	valueCh := make(chan interface{}, 1)
 	errCh := make(chan error, 1)
@@ -286,7 +282,7 @@ func FastAny(awaitables ...Awaitable) (interface{}, error) {
 }
 
 // MustFastAny does the same thing as FastAny but panics if an error is encountered
-func MustFastAny(awaitables ...Awaitable) interface{} {
+func MustFastAny(awaitables ...*task.Task) interface{} {
 	v, e := FastAny(awaitables...)
 	goerr.Check(e)
 	return v
@@ -299,26 +295,4 @@ type ErrTaskFailed struct {
 
 func (e *ErrTaskFailed) Error() string {
 	return "await: one or more errors were returned from the awaited tasks"
-}
-
-func awaitableToStopable(awaitables ...Awaitable) []stop.Stopable {
-	stopables := []stop.Stopable{}
-	for _, awaitable := range awaitables {
-		v, ok := awaitable.(stop.Stopable)
-		if ok {
-			stopables = append(stopables, v)
-		}
-	}
-	return stopables
-}
-
-func awaitableToStopableWithTimeout(awaitables ...Awaitable) []stop.StopableWithTimeout {
-	stopables := []stop.StopableWithTimeout{}
-	for _, awaitable := range awaitables {
-		v, ok := awaitable.(stop.StopableWithTimeout)
-		if ok {
-			stopables = append(stopables, v)
-		}
-	}
-	return stopables
 }
