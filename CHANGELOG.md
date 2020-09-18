@@ -1,3 +1,10 @@
+## [2.1.1](https://github.com/brad-jones/goasync/compare/v2.1.0...v2.1.1) (2020-09-18)
+
+
+### Bug Fixes
+
+* **deps:** bump github.com/brad-jones/goerr/v2 from 2.1.0 to 2.1.1 ([#1](https://github.com/brad-jones/goasync/issues/1)) ([53f968b](https://github.com/brad-jones/goasync/commit/53f968be88fcdd89af620557b2cb469144d74811))
+
 # [2.1.0](https://github.com/brad-jones/goasync/compare/v2.0.0...v2.1.0) (2020-09-18)
 
 
