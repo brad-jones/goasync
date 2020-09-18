@@ -25,9 +25,10 @@ type Task struct {
 	// channel to stop the task.
 	Stopper *chan struct{}
 
-	// Used internally to track when the task has actually finished
-	// regardless of what has or hasn't been resolved/rejected.
-	done *chan struct{}
+	// Used to track when the task has actually finished regardless of what
+	// has or hasn't been resolved/rejected. Tasks can just perform some action
+	// they don't necessarily have to resolve something.
+	Done *chan struct{}
 
 	// We keep a copy of the value for use with Result()
 	value interface{}
@@ -40,7 +41,7 @@ type Task struct {
 func (t *Task) Stop() {
 	defer func() { recover() }()
 	close(*t.Stopper)
-	<-*t.done
+	<-*t.Done
 }
 
 // StopWithTimeout will stop the task cooperatively but return an error if
@@ -51,7 +52,7 @@ func (t *Task) StopWithTimeout(timeout time.Duration) error {
 	close(*t.Stopper)
 
 	select {
-	case <-*t.done:
+	case <-*t.Done:
 		return nil
 	case <-time.After(timeout):
 		return goerr.Wrap(&ErrStoppingTaskTimeout{})
@@ -71,7 +72,7 @@ func (e *ErrStoppingTaskTimeout) Error() string {
 // (or rejected) values. This can be called many times over and the same
 // values will be returned.
 func (t *Task) Result() (interface{}, error) {
-	<-*t.done
+	<-*t.Done
 	return t.value, t.err
 }
 
@@ -88,7 +89,7 @@ func (t *Task) MustResult() interface{} {
 // to cooperatively stop.
 func (t *Task) ResultWithTimeout(runtime, stoptime time.Duration) (interface{}, error) {
 	select {
-	case <-*t.done:
+	case <-*t.Done:
 		return t.value, t.err
 	case <-time.After(runtime):
 		if err := t.StopWithTimeout(stoptime); err != nil {
@@ -176,13 +177,13 @@ func New(fn func(t *Internal)) *Task {
 		Resolver: tResolver,
 		Rejector: tRejector,
 		Stopper:  &stopper,
-		done:     &done,
+		Done:     &done,
 	}
 
 	// Execute the task asynchronously
 	go func() {
 		// Regardless of what the function does we know that it is done
-		defer close(done)
+		defer close(Done)
 
 		// Catch any panics and reject them
 		defer goerr.Handle(func(e error) {
@@ -227,7 +228,7 @@ func Resolved(v interface{}) *Task {
 		Resolver: resolver,
 		Rejector: rejector,
 		Stopper:  &done,
-		done:     &done,
+		Done:     &done,
 	}
 }
 
@@ -242,6 +243,6 @@ func Rejected(e error) *Task {
 		Resolver: resolver,
 		Rejector: rejector,
 		Stopper:  &done,
-		done:     &done,
+		Done:     &done,
 	}
 }
