@@ -51,21 +51,28 @@ func AllAsync(awaitables ...*task.Task) *task.Task {
 func AllOrError(awaitables ...*task.Task) ([]interface{}, error) {
 	defer stop.All(awaitables...)
 
+	doneCh := make(chan struct{}, 1)
+	defer close(doneCh)
 	errCh := make(chan error, 1)
 	valueCh := make(chan map[*task.Task]interface{}, 1)
 
-	for _, v := range awaitables {
-		awaitable := v
-		go func() {
-			v, err := awaitable.Result()
-			if err != nil {
+	for _, awaitable := range awaitables {
+		go func(awaitable *task.Task) {
+			select {
+			case <-*awaitable.Done:
+				valueCh <- map[*task.Task]interface{}{
+					awaitable: nil,
+				}
+			case v := <-awaitable.Resolver:
+				valueCh <- map[*task.Task]interface{}{
+					awaitable: v,
+				}
+			case err := <-awaitable.Rejector:
 				errCh <- goerr.Wrap(err)
+			case <-doneCh:
 				return
 			}
-			valueCh <- map[*task.Task]interface{}{
-				awaitable: v,
-			}
-		}()
+		}(awaitable)
 	}
 
 	values := map[*task.Task]interface{}{}
@@ -107,21 +114,28 @@ func AllOrErrorAsync(awaitables ...*task.Task) *task.Task {
 func AllOrErrorWithTimeout(timeout time.Duration, awaitables ...*task.Task) ([]interface{}, error) {
 	defer stop.AllWithTimeout(timeout, awaitables...)
 
+	doneCh := make(chan struct{}, 1)
+	defer close(doneCh)
 	errCh := make(chan error, 1)
 	valueCh := make(chan map[*task.Task]interface{}, 1)
 
-	for _, v := range awaitables {
-		awaitable := v
-		go func() {
-			v, err := awaitable.Result()
-			if err != nil {
+	for _, awaitable := range awaitables {
+		go func(awaitable *task.Task) {
+			select {
+			case <-*awaitable.Done:
+				valueCh <- map[*task.Task]interface{}{
+					awaitable: nil,
+				}
+			case v := <-awaitable.Resolver:
+				valueCh <- map[*task.Task]interface{}{
+					awaitable: v,
+				}
+			case err := <-awaitable.Rejector:
 				errCh <- goerr.Wrap(err)
+			case <-doneCh:
 				return
 			}
-			valueCh <- map[*task.Task]interface{}{
-				awaitable: v,
-			}
-		}()
+		}(awaitable)
 	}
 
 	values := map[*task.Task]interface{}{}
@@ -163,21 +177,28 @@ func AllOrErrorWithTimeoutAsync(timeout time.Duration, awaitables ...*task.Task)
 func FastAllOrError(awaitables ...*task.Task) ([]interface{}, error) {
 	defer stop.AllAsync(awaitables...)
 
+	doneCh := make(chan struct{}, 1)
+	defer close(doneCh)
 	errCh := make(chan error, 1)
 	valueCh := make(chan map[*task.Task]interface{}, 1)
 
-	for _, v := range awaitables {
-		awaitable := v
-		go func() {
-			v, err := awaitable.Result()
-			if err != nil {
+	for _, awaitable := range awaitables {
+		go func(awaitable *task.Task) {
+			select {
+			case <-*awaitable.Done:
+				valueCh <- map[*task.Task]interface{}{
+					awaitable: nil,
+				}
+			case v := <-awaitable.Resolver:
+				valueCh <- map[*task.Task]interface{}{
+					awaitable: v,
+				}
+			case err := <-awaitable.Rejector:
 				errCh <- goerr.Wrap(err)
+			case <-doneCh:
 				return
 			}
-			valueCh <- map[*task.Task]interface{}{
-				awaitable: v,
-			}
-		}()
+		}(awaitable)
 	}
 
 	values := map[*task.Task]interface{}{}
@@ -219,18 +240,24 @@ func FastAllOrErrorAsync(awaitables ...*task.Task) *task.Task {
 func Any(awaitables ...*task.Task) (interface{}, error) {
 	defer stop.All(awaitables...)
 
+	doneCh := make(chan struct{}, 1)
+	defer close(doneCh)
 	valueCh := make(chan interface{}, 1)
 	errCh := make(chan error, 1)
 
-	for _, v := range awaitables {
-		awaitable := v
-		go func() {
-			v, e := awaitable.Result()
-			if e != nil {
-				errCh <- goerr.Wrap(e)
+	for _, awaitable := range awaitables {
+		go func(awaitable *task.Task) {
+			select {
+			case <-*awaitable.Done:
+				valueCh <- nil
+			case v := <-awaitable.Resolver:
+				valueCh <- v
+			case err := <-awaitable.Rejector:
+				errCh <- goerr.Wrap(err)
+			case <-doneCh:
+				return
 			}
-			valueCh <- v
-		}()
+		}(awaitable)
 	}
 
 	select {
@@ -260,18 +287,24 @@ func AnyAsync(awaitables ...*task.Task) *task.Task {
 func AnyWithTimeout(timeout time.Duration, awaitables ...*task.Task) (interface{}, error) {
 	defer stop.AllWithTimeout(timeout, awaitables...)
 
+	doneCh := make(chan struct{}, 1)
+	defer close(doneCh)
 	valueCh := make(chan interface{}, 1)
 	errCh := make(chan error, 1)
 
-	for _, v := range awaitables {
-		awaitable := v
-		go func() {
-			v, e := awaitable.Result()
-			if e != nil {
-				errCh <- goerr.Wrap(e)
+	for _, awaitable := range awaitables {
+		go func(awaitable *task.Task) {
+			select {
+			case <-*awaitable.Done:
+				valueCh <- nil
+			case v := <-awaitable.Resolver:
+				valueCh <- v
+			case err := <-awaitable.Rejector:
+				errCh <- goerr.Wrap(err)
+			case <-doneCh:
+				return
 			}
-			valueCh <- v
-		}()
+		}(awaitable)
 	}
 
 	select {
@@ -301,18 +334,24 @@ func AnyWithTimeoutAsync(timeout time.Duration, awaitables ...*task.Task) *task.
 func FastAny(awaitables ...*task.Task) (interface{}, error) {
 	defer stop.AllAsync(awaitables...)
 
+	doneCh := make(chan struct{}, 1)
+	defer close(doneCh)
 	valueCh := make(chan interface{}, 1)
 	errCh := make(chan error, 1)
 
-	for _, v := range awaitables {
-		awaitable := v
-		go func() {
-			v, e := awaitable.Result()
-			if e != nil {
-				errCh <- goerr.Wrap(e)
+	for _, awaitable := range awaitables {
+		go func(awaitable *task.Task) {
+			select {
+			case <-*awaitable.Done:
+				valueCh <- nil
+			case v := <-awaitable.Resolver:
+				valueCh <- v
+			case err := <-awaitable.Rejector:
+				errCh <- goerr.Wrap(err)
+			case <-doneCh:
+				return
 			}
-			valueCh <- v
-		}()
+		}(awaitable)
 	}
 
 	select {
