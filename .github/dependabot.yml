@@ -8,6 +8,8 @@ updates:
     commit-message:
       prefix: "ci"
       include: "scope"
+    reviewers:
+      - "brad-jones"
   - package-ecosystem: "gomod"
     directory: "/"
     schedule:
@@ -15,6 +17,8 @@ updates:
     commit-message:
       prefix: "fix"
       include: "scope"
+    reviewers:
+      - "brad-jones"
   - package-ecosystem: "npm"
     directory: "/"
     schedule:
@@ -22,3 +26,5 @@ updates:
     commit-message:
       prefix: "build"
       include: "scope"
+    reviewers:
+      - "brad-jones"
