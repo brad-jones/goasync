@@ -1,3 +1,11 @@
+## [2.1.2](https://github.com/brad-jones/goasync/compare/v2.1.1...v2.1.2) (2021-03-11)
+
+
+### Bug Fixes
+
+* **deps:** bump github.com/brad-jones/goerr/v2 from 2.1.1 to 2.1.3 ([#48](https://github.com/brad-jones/goasync/issues/48)) ([0713234](https://github.com/brad-jones/goasync/commit/0713234fd095e6baee33121414eb73f005821667))
+* **deps:** bump github.com/stretchr/testify from 1.6.1 to 1.7.0 ([#25](https://github.com/brad-jones/goasync/issues/25)) ([e12a02f](https://github.com/brad-jones/goasync/commit/e12a02fa1305309841d3792c47cbf684b91144fd))
+
 ## [2.1.1](https://github.com/brad-jones/goasync/compare/v2.1.0...v2.1.1) (2020-09-18)
 
 
